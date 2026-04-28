@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## v1.0.0 - 2026-04-28
+
+### Added
+- 正式稳定版发布。
+- README 正式化与项目说明美化。
+- 鸣谢 @Eric86777 的 TCP 调优思路、NodeSeek 帖子与 vps-tcp-tune 仓库。
+
+### Changed
+- 版本号从 `v0.9.0-beta` 升级为 `v1.0.0`。
+- README 聚焦快速开始、控制台、TCP 智能调优、Argo VMess WebSocket、诊断修复与更新说明。
+
+### Notes
+- v1.0.0 已通过实机测试，后续进入 bugfix 与兼容性增强阶段。
+
 ## v0.9.0-beta - 2026-04-28
 
 ### Added

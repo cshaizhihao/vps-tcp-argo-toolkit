@@ -1,31 +1,62 @@
 # Speed Slayer
 
-**VPS 网络加速 · Argo 隧道 · VMess WebSocket**
+> VPS 网络加速 · Argo 隧道 · VMess WebSocket 订阅一键生成
 
-Speed Slayer 是一个面向 VPS 的一键工具，用于完成：
+**Speed Slayer** 是一个面向 VPS 的一键网络加速与节点部署工具。它将 **XanMod / BBR v3 / TCP 智能调优** 与 **Cloudflare Argo Tunnel + VMess WebSocket** 收敛到一个清晰、可重复执行、可诊断、可修复的流程中。
 
-- **BBR v3 / XanMod / TCP 智能调优**
-- **Cloudflare Argo Tunnel + VMess WebSocket 节点部署**
-- **订阅链接生成、诊断、日志、修复与重复安装清理**
+<p align="center">
+  <strong>斩断延迟，撕开隧道，释放节点。</strong>
+</p>
 
-项目地址：<https://github.com/cshaizhihao/speed-slayer>  
-作者：NodeSeek @cshaizhihao  
-当前版本：`v0.9.0-beta`
+<p align="center">
+  <img alt="Version" src="https://img.shields.io/badge/version-v1.0.0-22c55e">
+  <img alt="Shell" src="https://img.shields.io/badge/shell-bash-0891b2">
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-f97316">
+  <img alt="Status" src="https://img.shields.io/badge/status-stable-16a34a">
+</p>
 
 ---
 
-## 一键开始
+## 特性
+
+- **一键完整流程**：TCP 调优 + Argo VMess WebSocket 节点部署
+- **XanMod / BBR v3**：自动安装内核组件，重启后输入 `speed` 自动续跑
+- **智能 TCP 调优**：检测内存、SWAP、带宽，动态计算 TCP buffer
+- **真实测速**：集成 Ookla Speedtest，多服务器重试，失败不阻断安装
+- **原生 Argo VMess+WS**：`cloudflared + Xray + Nginx + systemd`
+- **订阅输出**：VMess URL、Base64、Clash、Shadowrocket、Auto
+- **重复安装友好**：自动清理旧服务、旧进程、旧配置并备份
+- **诊断与修复**：`doctor / logs / repair / speedtest / netcheck`
+- **自更新**：优先走 GitHub API，减少 raw CDN 缓存影响
+- **中文控制台 UI**：结果页、日志路径、下一步建议清晰可读
+
+---
+
+## 快速开始
 
 ```bash
 curl -fsSL -H "Accept: application/vnd.github.raw" -H "Cache-Control: no-cache" "https://api.github.com/repos/cshaizhihao/speed-slayer/contents/scripts/vps-argo-vmess-oneclick.sh?ref=main&ts=$(date +%s)" -o /tmp/speed && bash /tmp/speed --all
 ```
 
-`--all` 是安全主页模式，不会直接修改系统；选择完整流程后才会进入 TCP/Argo 部署。
+首次运行 `--all` 会进入安全主页，不会立即修改系统。选择完整流程后，脚本会按阶段执行，并在关键操作前给出确认。
 
 安装快捷命令后，后续直接输入：
 
 ```bash
 speed
+```
+
+---
+
+## 控制台
+
+```text
+『Speed Slayer 控制台』
+
+  1. 一键执行完整流程        2. 节点管理
+  3. TCP 加速                4. 诊断与日志
+  5. 修复与清理              6. 更新
+  0. 退出
 ```
 
 ---
@@ -45,43 +76,31 @@ speed --netcheck       # DNS / GitHub / Cloudflare / 出站连通性检测
 
 ---
 
-## 控制台菜单
-
-```text
-『Speed Slayer 控制台』
-
-1. 一键执行完整流程        2. 节点管理
-3. TCP 加速                4. 诊断与日志
-5. 修复与清理              6. 更新
-0. 退出
-```
-
----
-
 ## 完整流程
 
 1. 安装 `speed` 快捷命令
-2. 检测当前内核 / TCP 状态
-3. 安装 XanMod / BBR v3 内核（如需要）
-4. 提示确认重启，重启后输入 `speed` 自动续跑
-5. 执行 TCP 智能调优
-6. 部署 Argo VMess+WS
-7. 生成 VMess URL 与订阅链接
-8. 执行健康检查并输出结果页
-9. 提示本地优选 Cloudflare CDN
+2. 检测系统环境、内核、TCP 状态
+3. 如未进入 XanMod 内核，安装 XanMod / BBR v3 内核组件
+4. 内核安装完成后询问是否立即重启
+5. 重启后输入 `speed`，自动识别续跑状态
+6. 执行 TCP 智能调优
+7. 部署 Argo VMess WebSocket 节点
+8. 生成节点与订阅链接
+9. 执行健康检查
+10. 输出安装完成结果页与 Cloudflare CDN 优选建议
 
 ---
 
 ## TCP 智能调优
 
-进入 XanMod 内核后，Speed Slayer 会执行：
+Speed Slayer 会按以下步骤执行 TCP 调优：
 
-1. 检测内存 / SWAP
+1. 检测虚拟内存（SWAP）与物理内存
 2. 执行 Speedtest 或读取手动带宽
-3. 根据带宽、内存、地区计算 TCP buffer
-4. 清理 sysctl 冲突项
-5. 写入 BBR / FQ / TCP 参数
-6. 应用网卡 FQ 队列、limits、DNS、IPv6 策略
+3. 根据带宽、内存与地区动态计算 TCP buffer
+4. 清理冲突的 sysctl 配置
+5. 写入 BBR / FQ / TCP buffer / backlog / keepalive / limits / DNS 参数
+6. 应用 FQ 队列、systemd limits、IPv6 策略
 7. 验证 BBR / FQ / buffer 状态
 
 可手动指定带宽和地区：
@@ -99,21 +118,53 @@ SPEED_AUTO_SPEEDTEST=0 speed --optimize
 
 ---
 
-## Argo VMess+WS
+## Argo VMess WebSocket
 
-Speed Slayer 自动部署：
+Speed Slayer 原生部署以下组件：
 
 - `cloudflared`
 - `Xray VMess + WebSocket`
 - `Nginx WebSocket 反代与订阅接口`
 - `systemd` 服务
-- VMess URL / Base64 / Clash / Shadowrocket / Auto 订阅
 
-重复安装前会自动清理旧服务、旧进程、旧配置，并备份 `/etc/argox`。
+安装完成后会输出：
+
+- VMess URL
+- Base64 订阅
+- Clash 订阅
+- Shadowrocket 订阅
+- Auto 订阅
 
 ---
 
-## 日志位置
+## 重复安装与修复
+
+同一台机器重复安装时，Speed Slayer 会自动：
+
+- 停止并禁用旧 `argo` / `xray` 服务
+- 清理旧 `cloudflared` / `xray` / 独立 Nginx 进程
+- 备份旧 `/etc/argox` 到 `/etc/argox.bak.<timestamp>`
+- 重建干净配置目录
+- 对 VMess+WS 配置做 JSON 级校验
+
+手动修复：
+
+```bash
+speed --repair
+```
+
+---
+
+## 诊断与日志
+
+```bash
+speed --doctor
+speed --logs
+speed --netcheck
+speed --speedtest
+```
+
+日志路径：
 
 ```text
 /etc/vps-argo-vmess/install.log
@@ -123,15 +174,6 @@ Speed Slayer 自动部署：
 /etc/vps-argo-vmess/netcheck.log
 /etc/argox/argo.log
 /etc/argox/xray-error.log
-```
-
-查看日志：
-
-```bash
-speed --logs
-speed --logs tcp
-speed --logs argo
-speed --logs xray
 ```
 
 ---
@@ -152,16 +194,28 @@ curl -fsSL -H "Accept: application/vnd.github.raw" -H "Cache-Control: no-cache" 
 
 ---
 
-## Beta 状态
+## CDN 优选建议
 
-当前版本：`v0.9.0-beta`
+节点生成后，建议在本地运行 CloudflareSpeedTest，选择延迟更低、速度更稳的 CDN IP：
 
-已具备主流程能力，建议继续进行多系统实机回归：
+<https://github.com/XIU2/CloudflareSpeedTest/releases>
 
-- Debian 12
-- Ubuntu 22.04 / 24.04
-- 1C1G / 1C2G 小内存机器
-- 重复安装 / 残留环境
+---
+
+## 鸣谢
+
+特别感谢 **@Eric86777** 的 TCP 调优思路与实践参考。
+
+- NodeSeek 帖子：<https://www.nodeseek.com/post-704739-1>
+- 项目仓库：<https://github.com/Eric86777/vps-tcp-tune>
+
+Speed Slayer 的 TCP 调优方向参考了他的思路，并在此基础上做了产品化控制台、续跑机制、诊断修复、Argo VMess WebSocket 部署与订阅输出等整合。
+
+---
+
+## 版本
+
+当前稳定版：`v1.0.0`
 
 ---
 

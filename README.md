@@ -100,8 +100,9 @@ speed --doctor
 ## 命令列表
 
 ```bash
+speed --tcp-status           # 查看 TCP / BBR / 内核状态
 speed --check                # 环境检测
-speed --optimize             # 只执行 TCP 优化
+speed --optimize             # 进入 Speed Slayer TCP 施工面板后执行优化
 speed --install-argo-vmess   # 只安装 Argo VMess + WS
 speed --all                  # 显示交互主页（安全默认）
 speed --force-all            # 无人值守完整流程：TCP 优化 + Argo VMess + WS

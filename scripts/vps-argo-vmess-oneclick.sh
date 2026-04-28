@@ -179,11 +179,41 @@ run_with_progress() {
   fi
 }
 
+tcp_value() { sysctl -n "$1" 2>/dev/null || echo "unknown"; }
+
+tcp_status_panel() {
+  section "Speed Slayer · TCP 状态"
+  printf "%b%-18s%b %s\n" "$C_CYAN" "Kernel" "$C_RESET" "$(uname -r)"
+  printf "%b%-18s%b %s\n" "$C_CYAN" "XanMod" "$C_RESET" "$(is_xanmod_kernel && echo YES || echo NO)"
+  printf "%b%-18s%b %s\n" "$C_CYAN" "Congestion" "$C_RESET" "$(tcp_value net.ipv4.tcp_congestion_control)"
+  printf "%b%-18s%b %s\n" "$C_CYAN" "Qdisc" "$C_RESET" "$(tcp_value net.core.default_qdisc)"
+  printf "%b%-18s%b %s\n" "$C_CYAN" "IPv6 disabled" "$C_RESET" "$(tcp_value net.ipv6.conf.all.disable_ipv6)"
+}
+
+tcp_plan_panel() {
+  section "Speed Slayer · TCP 施工计划"
+  if is_xanmod_kernel; then
+    progress_step 10 "已在 XanMod 内核：跳过内核安装阶段"
+    progress_step 35 "执行 BBR v3 / FQ 网络参数优化"
+    progress_step 55 "执行 DNS 净化 / 网络稳定性修复"
+    progress_step 75 "执行 Realm 首连超时修复"
+    progress_step 90 "可选 IPv6 禁用"
+    progress_step 100 "输出 TCP 状态摘要"
+  else
+    progress_step 10 "当前不是 XanMod：准备安装 XanMod + BBR v3 内核"
+    progress_step 60 "安装完成后需要重启"
+    progress_step 100 "重启后执行 speed 自动继续后续 TCP 调优 + Argo 安装"
+  fi
+}
+
 run_tcp_optimize() {
   require_root
-  section "TCP 优化确认"
-  warn "即将执行 TCP 优化：XanMod / BBR v3 / 网络调优。该步骤可能修改内核、sysctl、DNS、IPv6，并可能要求重启。"
-  if ! confirm_action "是否继续进入 TCP 一键全自动优化？默认回车 = Y"; then
+  banner
+  intro
+  tcp_status_panel
+  tcp_plan_panel
+  warn "TCP 阶段会修改内核 / sysctl / DNS / IPv6 等系统网络配置，且可能要求重启。"
+  if ! confirm_action "是否继续？默认回车 = Y"; then
     warn "已取消 TCP 优化。"
     return 0
   fi
@@ -191,9 +221,10 @@ run_tcp_optimize() {
   if ! is_xanmod_kernel; then
     save_pending_state
   fi
-  info "启动 TCP 一键全自动优化：XanMod + BBR v3 + 网络调优"
-  warn "当前 TCP 阶段仍使用上游 66 核心逻辑，输出暂保留可见，避免隐藏内核/重启交互提示。下一轮会继续做原生化瘦身。"
+  section "执行 TCP 核心优化"
+  warn "当前版本采用 Speed Slayer 施工面板 + 上游 66 核心后端。关键交互保持可见，避免吞掉内核安装/重启提示。"
   fetch_or_run_script "$TCP_SCRIPT_LOCAL" "scripts/tcp-one-click-optimize.sh"
+  tcp_status_panel || true
   if ! is_xanmod_kernel; then
     show_continue_hint
   fi
@@ -701,6 +732,7 @@ Usage:
   bash vps-argo-vmess-oneclick.sh [command]
 
 Commands:
+  --tcp-status           查看 TCP / BBR / 内核状态
   --optimize             执行全自动 TCP 优化：BBR v3 + 网络调优
   --install-argo-vmess   安装/重装 Argo VMess + WS，并生成节点/订阅 URL
   --all                  显示交互主页（安全默认，不直接修改系统）
@@ -745,37 +777,39 @@ menu_body() {
 介绍：BBR v3 / XanMod 网络调优 + 原生 Argo VMess WebSocket 节点生成
 署名：NodeSeek @cshaizhihao
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. 执行 TCP 优化（进入前需 Y/N 确认，默认 Y）
-2. 安装/重装 Argo VMess + WS
-3. 一键执行完整流程（TCP 优化 + Argo VMess + WS）
-4. 查看节点/订阅信息
-5. 卸载 Argo VMess + WS
-6. 清理旧 Argo 残留
-7. 安装 speed 快捷命令
-8. 重启后继续安装
-9. 环境检测
-10. 结果摘要
-11. 健康检查
-12. 一键诊断 doctor
-13. 更新 speed 自身
+1. 查看 TCP / BBR / 内核状态
+2. 执行 TCP 优化（进入前需 Y/N 确认，默认 Y）
+3. 安装/重装 Argo VMess + WS
+4. 一键执行完整流程（TCP 优化 + Argo VMess + WS）
+5. 查看节点/订阅信息
+6. 卸载 Argo VMess + WS
+7. 清理旧 Argo 残留
+8. 安装 speed 快捷命令
+9. 重启后继续安装
+10. 环境检测
+11. 结果摘要
+12. 健康检查
+13. 一键诊断 doctor
+14. 更新 speed 自身
 0. 退出
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EOF
   read -r -p "请输入选择: " choice
   case "$choice" in
-    1) run_tcp_optimize ;;
-    2) install_argo_vmess_ws ;;
-    3) force_all ;;
-    4) show_argo_vmess_ws_info ;;
-    5) uninstall_argo_vmess_ws ;;
-    6) clean_argo_state ;;
-    7) install_shortcut ;;
-    8) continue_after_reboot ;;
-    9) check_environment ;;
-    10) summarize_result ;;
-    11) health_check ;;
-    12) doctor ;;
-    13) update_self ;;
+    1) tcp_status_panel ;;
+    2) run_tcp_optimize ;;
+    3) install_argo_vmess_ws ;;
+    4) force_all ;;
+    5) show_argo_vmess_ws_info ;;
+    6) uninstall_argo_vmess_ws ;;
+    7) clean_argo_state ;;
+    8) install_shortcut ;;
+    9) continue_after_reboot ;;
+    10) check_environment ;;
+    11) summarize_result ;;
+    12) health_check ;;
+    13) doctor ;;
+    14) update_self ;;
     0) exit 0 ;;
     *) err "无效选择"; exit 1 ;;
   esac
@@ -800,6 +834,7 @@ default_action() {
 }
 
 case "${1:-}" in
+  --tcp-status) tcp_status_panel ;;
   --optimize) run_tcp_optimize ;;
   --install-argo-vmess) install_argo_vmess_ws ;;
   --all) run_all ;;

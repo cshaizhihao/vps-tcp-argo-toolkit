@@ -1,27 +1,72 @@
-# VPS TCP Tune + Argo Toolkit
+# VPS TCP Tune + Argo VMess Toolkit
 
-用于存放并后续融合两个上游一键脚本：
+专用一键脚本仓库：
 
-1. TCP 调优脚本：Eric86777/vps-tcp-tune
-2. Argo 一键脚本：fscarmen/argox
+1. **全自动 TCP 优化**：保留原 TCP 调优脚本菜单 `66` 能力，即 XanMod + BBR v3 + 网络调优。
+2. **Argo VMess + WebSocket**：从 ArgoX 中只启用 `VMess + WS` 协议，并生成节点/订阅 URL。
 
-## 当前可用功能
+## 当前主入口
 
-### TCP 一键全自动优化（仅保留原脚本菜单 66）
+```text
+scripts/vps-argo-vmess-oneclick.sh
+```
 
-已单独整理为：
+### 在线执行
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/cshaizhihao/vps-tcp-argo-toolkit/main/scripts/vps-argo-vmess-oneclick.sh -o /tmp/vps-argo-vmess-oneclick.sh && bash /tmp/vps-argo-vmess-oneclick.sh --all
+```
+
+### 常用命令
+
+```bash
+# 只执行 TCP 优化
+bash scripts/vps-argo-vmess-oneclick.sh --optimize
+
+# 只安装 Argo VMess + WS
+bash scripts/vps-argo-vmess-oneclick.sh --install-argo-vmess
+
+# 一键执行：TCP 优化 + Argo VMess + WS
+bash scripts/vps-argo-vmess-oneclick.sh --all
+
+# 查看节点 / 订阅 URL
+bash scripts/vps-argo-vmess-oneclick.sh --show-url
+
+# 卸载 Argo VMess + WS
+bash scripts/vps-argo-vmess-oneclick.sh --uninstall-argo
+```
+
+## 可配置环境变量
+
+```bash
+UUID=自定义UUID
+WS_PATH=argox
+START_PORT=30000
+NGINX_PORT=8001
+NODE_NAME=VPS-Argo-VMess
+ARGO_DOMAIN=固定Argo域名
+ARGO_AUTH='Argo Token 或 Json 或 Cloudflare API 信息'
+SERVER=优选CDN地址
+SERVER_PORT=443
+```
+
+示例：
+
+```bash
+WS_PATH=zaki NODE_NAME=Zaki-VPS bash scripts/vps-argo-vmess-oneclick.sh --install-argo-vmess
+```
+
+## V1 实现方式
+
+### TCP 优化
+
+文件：
 
 ```text
 scripts/tcp-one-click-optimize.sh
 ```
 
-一键运行：
-
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/cshaizhihao/vps-tcp-argo-toolkit/main/scripts/tcp-one-click-optimize.sh)
-```
-
-功能来源于原 `net-tcp-tune.sh` 的菜单项：
+来源于原 `net-tcp-tune.sh` 的菜单项：
 
 ```text
 66. ⭐ 一键全自动优化 (BBR v3 + 网络调优)
@@ -36,7 +81,43 @@ bash <(curl -fsSL https://raw.githubusercontent.com/cshaizhihao/vps-tcp-argo-too
   - Realm 转发修复
   - 可选永久禁用 IPv6
 
-> 当前版本只是把菜单 66 作为唯一入口暴露出来；内部仍保留原脚本依赖函数，避免抽取遗漏导致功能异常。
+### Argo VMess + WS
+
+文件：
+
+```text
+scripts/upstream/argox.sh
+```
+
+V1 不直接大规模删减 ArgoX，而是通过非交互配置强制：
+
+```bash
+INSTALL_PROTOCOLS=(f)
+```
+
+其中 `f` 对应：
+
+```text
+VMess + WS
+```
+
+生成的核心配置：
+
+```text
+协议：VMess
+传输：WebSocket
+Path：/<WS_PATH>-vm
+alterId：0
+Argo：Cloudflare Tunnel
+```
+
+## 审计文档
+
+```text
+docs/argox-vmess-ws-callchain.md
+```
+
+记录了 ArgoX 中 VMess + WS + Argo 的调用链、保留函数、后续瘦身方向。
 
 ## 上游脚本归档
 
@@ -47,22 +128,8 @@ scripts/upstream/
   argox.sh
 ```
 
-## 原始安装命令
-
-### TCP 调优脚本
-
-```bash
-bash <(curl -fsSL "https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/main/install-alias.sh?$(date +%s)")
-```
-
-### Argo 一键脚本
-
-```bash
-bash <(wget -qO- https://raw.githubusercontent.com/fscarmen/argox/main/argox.sh) -l
-```
-
 ## 后续计划
 
-- 根据需求继续融合 Argo 功能
-- 设计统一入口脚本
-- 增加环境检测、参数菜单、日志、回滚/卸载说明
+- V2：把 ArgoX 中非 VMess+WS 协议逐步瘦身
+- V2：把 TCP 66 依赖函数抽成更小核心模块
+- V3：增加 dry-run、日志汇总、失败回滚提示、安装后健康检查

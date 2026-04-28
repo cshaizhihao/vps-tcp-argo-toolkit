@@ -7,7 +7,7 @@ set -euo pipefail
 # - Argo VMess+WS: native cloudflared + Xray + Nginx implementation, no ArgoX install chain.
 
 REPO_RAW_BASE="https://raw.githubusercontent.com/cshaizhihao/speed-slayer/main"
-SPEED_SLAYER_VERSION="2026.04.28-r3"
+SPEED_SLAYER_VERSION="2026.04.28-r4"
 PROJECT_URL="https://github.com/cshaizhihao/speed-slayer"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo .)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd 2>/dev/null || echo .)"
@@ -56,10 +56,10 @@ EOF
 }
 
 intro() {
-  printf "%b%s%b\n" "$C_BOLD$C_CYAN" " 『"
-  printf "%b%s%b\n" "$C_WHITE" "  VPS 网络加速 · Argo 隧道 · VMess WebSocket" "$C_RESET"
-  printf "%b%s%b\n" "$C_WHITE" "  斩断延迟，撕开隧道，释放节点。" "$C_RESET"
-  printf "%b%s%b\n" "$C_BOLD$C_CYAN" " 』" "$C_RESET"
+  printf "%b%s%b\n" "$C_BOLD$C_CYAN" "  『"
+  printf "%b%*s%b\n" "$C_WHITE" 56 "VPS 网络加速 · Argo 隧道 · VMess WebSocket" "$C_RESET"
+  printf "%b%*s%b\n" "$C_WHITE" 49 "斩断延迟，撕开隧道，释放节点。" "$C_RESET"
+  printf "%b%64s%b\n" "$C_BOLD$C_CYAN" "』" "$C_RESET"
   printf "  %b入口：%b输入 %bspeed%b 进入控制台；重启后输入 %bspeed%b 自动续跑。\n" "$C_YELLOW" "$C_RESET" "$C_BOLD$C_GREEN" "$C_RESET" "$C_BOLD$C_GREEN" "$C_RESET"
   printf "  %bGitHub:%b %s  %bVersion:%b %s  %bAuthor:%b NodeSeek @cshaizhihao\n" "$C_CYAN" "$C_RESET" "$PROJECT_URL" "$C_CYAN" "$C_RESET" "$SPEED_SLAYER_VERSION" "$C_CYAN" "$C_RESET"
   echo ""

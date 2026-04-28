@@ -725,12 +725,25 @@ native_argo_install_staged() {
 verify_vmess_only() {
   local inbound="/etc/argox/inbound.json"
   [ -s "$inbound" ] || { err "未找到 inbound 配置：$inbound"; return 1; }
-  if grep -Eqi 'reality|hysteria|trojan|shadowsocks|vless|xhttp|grpc|ss-ws|trojan-ws|vless-ws' "$inbound"; then
-    err "检测到非 VMess+WS 协议残留，拒绝标记为成功。"
-    return 1
-  fi
-  grep -Eq '"protocol"[[:space:]]*:[[:space:]]*"vmess"' "$inbound"
-  grep -Eq '"network"[[:space:]]*:[[:space:]]*"ws"' "$inbound"
+  python3 - "$inbound" <<'PYVERIFY'
+import json, sys
+path = sys.argv[1]
+with open(path, 'r', encoding='utf-8') as f:
+    data = json.load(f)
+inbounds = data.get('inbounds') or []
+if len(inbounds) != 1:
+    print(f"inbound 数量异常：{len(inbounds)}", file=sys.stderr)
+    sys.exit(1)
+ib = inbounds[0]
+if ib.get('protocol') != 'vmess':
+    print(f"协议异常：{ib.get('protocol')}", file=sys.stderr)
+    sys.exit(1)
+stream = ib.get('streamSettings') or {}
+if stream.get('network') != 'ws':
+    print(f"传输异常：{stream.get('network')}", file=sys.stderr)
+    sys.exit(1)
+print('VMess+WS 校验通过')
+PYVERIFY
 }
 
 extract_vmess_only() { [ -s /etc/argox/list ] && cat /etc/argox/list || warn "尚未生成 /etc/argox/list"; }
@@ -741,6 +754,7 @@ install_argo_vmess_ws() {
   clean_argo_state >/dev/null 2>&1 || true
   write_argox_vmess_config
   info "正在部署 Argo VMess+WS 节点。"
+  info "安装前会自动清理旧服务、旧进程和旧配置，支持重复安装。"
   native_argo_install_staged
   verify_vmess_only
   success "Argo VMess+WS 安装流程结束"
@@ -770,12 +784,20 @@ uninstall_argo_vmess_ws() {
 clean_argo_state() {
   require_root
   warn "清理现有 Argo 配置并备份数据。"
-  systemctl stop argo xray nginx >/dev/null 2>&1 || true
+  local ts
+  ts="$(date +%Y%m%d%H%M%S)"
+  systemctl stop argo xray >/dev/null 2>&1 || true
   systemctl disable argo xray >/dev/null 2>&1 || true
+  pkill -f '/etc/argox/cloudflared' >/dev/null 2>&1 || true
+  pkill -f '/etc/argox/xray' >/dev/null 2>&1 || true
+  pkill -f 'nginx.*argox/nginx.conf' >/dev/null 2>&1 || true
   rm -f /etc/systemd/system/argo.service /etc/systemd/system/xray.service
   systemctl daemon-reload >/dev/null 2>&1 || true
-  mv /etc/argox "/etc/argox.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null || true
-  success "Argo 配置已备份清理；现在可执行：speed --install-argo-vmess"
+  if [ -d /etc/argox ]; then
+    mv /etc/argox "/etc/argox.bak.${ts}" 2>/dev/null || rm -rf /etc/argox
+  fi
+  mkdir -p /etc/argox /etc/argox/subscribe
+  success "Argo 配置已备份清理。"
 }
 
 force_all() {

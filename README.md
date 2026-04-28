@@ -146,6 +146,16 @@ bash scripts/vps-argo-vmess-oneclick.sh --doctor
 
 ---
 
+## 重复安装与自动清理
+
+Speed Slayer 支持在同一台机器上重复安装。安装 Argo VMess+WS 前会自动执行预清理：
+
+- 停止并禁用 `argo` / `xray` 服务
+- 清理 `/etc/argox/cloudflared`、`/etc/argox/xray`、独立 Nginx 进程
+- 备份旧 `/etc/argox` 到 `/etc/argox.bak.<timestamp>`
+- 重建干净的 `/etc/argox` 与订阅目录
+- 使用 JSON 级校验确认最终只存在一个 `vmess + ws` inbound
+
 ## 视觉与交互
 
 脚本启动会显示彩色 `SPEED SLAYER` ASCII 艺术字，并使用统一的彩色状态输出。Argo 安装阶段显示清晰的阶段进度：

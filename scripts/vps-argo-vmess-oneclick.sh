@@ -353,6 +353,23 @@ health_check() {
   return 1
 }
 
+update_self() {
+  require_root
+  mkdir -p "$WORK_DIR"
+  curl -fsSL "${REPO_RAW_BASE}/scripts/vps-argo-vmess-oneclick.sh" -o "$INSTALLED_BIN.tmp"
+  bash -n "$INSTALLED_BIN.tmp"
+  mv "$INSTALLED_BIN.tmp" "$INSTALLED_BIN"
+  chmod +x "$INSTALLED_BIN"
+  success "speed 已更新到最新版本：$INSTALLED_BIN"
+}
+
+doctor() {
+  require_root
+  check_environment || true
+  summarize_result || true
+  health_check || true
+}
+
 usage() {
   cat <<'EOF'
 VPS TCP Optimize + Argo VMess+WS OneClick
@@ -373,6 +390,8 @@ Commands:
   --check                检测当前环境和已安装状态
   --summary              输出结果摘要
   --health               安装后健康检查
+  --doctor               一键诊断：环境检测 + 结果摘要 + 健康检查
+  --update-self          更新 /usr/local/bin/speed 到 GitHub 最新版本
   -h, --help             显示帮助
 
 Optional environment variables:
@@ -408,6 +427,8 @@ menu() {
 8. 环境检测
 9. 结果摘要
 10. 健康检查
+11. 一键诊断 doctor
+12. 更新 speed 自身
 0. 退出
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EOF
@@ -423,6 +444,8 @@ EOF
     8) check_environment ;;
     9) summarize_result ;;
     10) health_check ;;
+    11) doctor ;;
+    12) update_self ;;
     0) exit 0 ;;
     *) err "无效选择"; exit 1 ;;
   esac
@@ -441,6 +464,8 @@ case "${1:-}" in
   --check) check_environment ;;
   --summary) summarize_result ;;
   --health) health_check ;;
+  --doctor) doctor ;;
+  --update-self) update_self ;;
   -h|--help) usage ;;
   "") menu ;;
   *) err "未知参数：$1"; usage; exit 1 ;;

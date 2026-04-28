@@ -70,6 +70,12 @@ bash scripts/vps-argo-vmess-oneclick.sh --summary
 # 安装后健康检查
 bash scripts/vps-argo-vmess-oneclick.sh --health
 
+# 一键诊断：环境检测 + 结果摘要 + 健康检查
+bash scripts/vps-argo-vmess-oneclick.sh --doctor
+
+# 更新已安装的 speed 快捷命令
+speed --update-self
+
 # 卸载 Argo VMess + WS
 bash scripts/vps-argo-vmess-oneclick.sh --uninstall-argo
 ```
@@ -148,6 +154,22 @@ Path：/<WS_PATH>-vm
 alterId：0
 Argo：Cloudflare Tunnel
 ```
+
+## 一键诊断
+
+```bash
+speed --doctor
+```
+
+等价于：
+
+```bash
+speed --check
+speed --summary
+speed --health
+```
+
+用于快速判断当前 VPS 的 TCP 优化、Argo 隧道、订阅输出是否处于可用状态。
 
 ## 健康检查
 

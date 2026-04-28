@@ -694,6 +694,8 @@ progress_step() {
 native_argo_install_staged() {
   section "Speed Slayer · Argo VMess+WS"
   load_speed_config
+  progress_step 5 "安装前检查端口与残留"
+  preflight_argo_ports
   progress_step 10 "安装基础依赖"
   install_base_deps >>"$LOG_FILE" 2>&1
   progress_step 25 "下载 / 校验 cloudflared 与 Xray-core"
@@ -755,8 +757,14 @@ install_argo_vmess_ws() {
   write_argox_vmess_config
   info "正在部署 Argo VMess+WS 节点。"
   info "安装前会自动清理旧服务、旧进程和旧配置，支持重复安装。"
-  native_argo_install_staged
-  verify_vmess_only
+  if ! native_argo_install_staged; then
+    fail_report "Argo VMess+WS 部署"
+    return 1
+  fi
+  if ! verify_vmess_only; then
+    fail_report "VMess+WS 配置校验"
+    return 1
+  fi
   success "Argo VMess+WS 安装流程结束"
   extract_vmess_only || true
   summarize_result || true
@@ -926,6 +934,7 @@ health_check() {
   printf "%-18s %s\n" "xray.service:" "$xray_state"
   printf "%-18s %s\n" "nginx.service:" "$nginx_state"
   printf "%-18s %s (%s)\n" "本地入口端口:" "$nginx_port" "$(port_state "$nginx_port")"
+  [ "$(port_state "$nginx_port")" != "listening" ] || echo "端口占用: $(port_owner "$nginx_port")"
 
   [ "$argo_state" = "running" ] || fail=1
   [ "$xray_state" = "running" ] || fail=1

@@ -8,6 +8,7 @@ set -euo pipefail
 
 REPO_RAW_BASE="https://raw.githubusercontent.com/cshaizhihao/speed-slayer/main"
 SPEED_SLAYER_VERSION="2026.04.28-r1"
+PROJECT_URL="https://github.com/cshaizhihao/speed-slayer"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo .)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd 2>/dev/null || echo .)"
 
@@ -44,19 +45,21 @@ section() { echo ""; line; printf "%b%s%b\n" "$C_BOLD$C_CYAN" " $1" "$C_RESET"; 
 banner() {
   printf "%b" "$C_BOLD$C_MAGENTA"
   cat <<'EOF'
-   _____ ____  ______ ______ ____     _____ __    ___   __  __________ 
-  / ___// __ \/ ____// ____// __ \   / ___// /   /   | / / / / ____/ __ \
-  \__ \/ /_/ / __/  / __/  / / / /   \__ \/ /   / /| |/ /_/ / __/ / /_/ /
- ___/ / ____/ /___ / /___ / /_/ /   ___/ / /___/ ___ / __  / /___/ _, _/ 
-/____/_/   /_____//_____/_____/   /____/_____/_/  |_/_/ /_/_____/_/ |_|  
+███████╗██████╗ ███████╗███████╗██████╗     ███████╗██╗      █████╗ ██╗   ██╗███████╗██████╗ 
+██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗    ██╔════╝██║     ██╔══██╗╚██╗ ██╔╝██╔════╝██╔══██╗
+███████╗██████╔╝█████╗  █████╗  ██║  ██║    ███████╗██║     ███████║ ╚████╔╝ █████╗  ██████╔╝
+╚════██║██╔═══╝ ██╔══╝  ██╔══╝  ██║  ██║    ╚════██║██║     ██╔══██║  ╚██╔╝  ██╔══╝  ██╔══██╗
+███████║██║     ███████╗███████╗██████╔╝    ███████║███████╗██║  ██║   ██║   ███████╗██║  ██║
+╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝     ╚══════╝╚══════╝╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝
 EOF
   printf "%b" "$C_RESET"
-  printf "%b%s%b\n" "$C_DIM" "        Native BBR v3 + Argo VMess WebSocket one-click accelerator" "$C_RESET"
+  printf "%b%s%b\n" "$C_BOLD$C_CYAN" "        VPS Acceleration · Argo VMess WebSocket · One Command: speed" "$C_RESET"
 }
 
 intro() {
-  printf "%b%s%b\n" "$C_CYAN" "  Speed Slayer 是一个 VPS 网络加速与 Argo 隧道一键脚本。" "$C_RESET"
-  printf "%b%s%b\n" "$C_WHITE" "  功能：BBR v3 网络优化 + Cloudflare Argo VMess WebSocket 节点生成。" "$C_RESET"
+  printf "%b%s%b\n" "$C_CYAN" "  Speed Slayer 将 BBR v3 智能 TCP 调优、Argo Tunnel 与 VMess WebSocket 节点生成收拢为一套产品化流程。" "$C_RESET"
+  printf "%b%s%b\n" "$C_WHITE" "  入口：直接输入 ${C_BOLD}${C_GREEN}speed${C_RESET}${C_WHITE} 进入控制台；重启后也输入 ${C_BOLD}${C_GREEN}speed${C_RESET}${C_WHITE} 自动续跑。" "$C_RESET"
+  printf "%b%s%b\n" "$C_DIM" "  GitHub: ${PROJECT_URL}" "$C_RESET"
   printf "%b%s%b\n" "$C_DIM" "  Version: ${SPEED_SLAYER_VERSION} | Author: NodeSeek @cshaizhihao" "$C_RESET"
   echo ""
 }
@@ -963,9 +966,6 @@ proxies:
 EOF
   cp /etc/argox/subscribe/base64 /etc/argox/subscribe/shadowrocket
   cat > /etc/argox/list <<EOF
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Speed Slayer · VMess+WS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Protocol : VMess
 Network  : WebSocket
 UUID     : ${UUID}
@@ -1233,14 +1233,16 @@ subscription_url() {
   grep -E "https://.*/${name}$" /etc/argox/list 2>/dev/null | head -1
 }
 
+kv() { printf "%b%-13s%b %b%s%b\n" "$C_DIM" "$1" "$C_RESET" "$3" "$2" "$C_RESET"; }
+
 summarize_result() {
   echo ""
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo " Speed Slayer · Installation Complete"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  printf "%-11s %s\n" "Kernel" "$(uname -r)"
-  printf "%-11s %s\n" "BBR" "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo unknown)"
-  printf "%-11s %s\n" "Queue" "$(sysctl -n net.core.default_qdisc 2>/dev/null || echo unknown)"
+  line
+  printf "%b%s%b\n" "$C_BOLD$C_GREEN" " Speed Slayer · Installation Complete" "$C_RESET"
+  line
+  kv "Kernel" "$(uname -r)" "$C_WHITE"
+  kv "BBR" "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo unknown)" "$C_GREEN"
+  kv "Queue" "$(sysctl -n net.core.default_qdisc 2>/dev/null || echo unknown)" "$C_GREEN"
 
   if [ -s /etc/argox/list ]; then
     local uuid host path cdn vmess base64 clash shadowrocket auto
@@ -1255,38 +1257,39 @@ summarize_result() {
     auto="$(subscription_url auto)"
 
     echo ""
-    echo "Node"
-    printf "%-11s %s\n" "Protocol" "VMess"
-    printf "%-11s %s\n" "Network" "WebSocket"
-    printf "%-11s %s\n" "TLS" "Enabled"
-    printf "%-11s %s\n" "Host/SNI" "$host"
-    printf "%-11s %s\n" "Path" "$path"
-    printf "%-11s %s\n" "UUID" "$uuid"
-    printf "%-11s %s\n" "CDN" "$cdn"
+    printf "%b%s%b\n" "$C_BOLD$C_CYAN" "Node" "$C_RESET"
+    kv "Protocol" "VMess" "$C_GREEN"
+    kv "Network" "WebSocket" "$C_GREEN"
+    kv "TLS" "Enabled" "$C_GREEN"
+    kv "Host/SNI" "$host" "$C_YELLOW"
+    kv "Path" "$path" "$C_YELLOW"
+    kv "UUID" "$uuid" "$C_MAGENTA"
+    kv "CDN" "$cdn" "$C_CYAN"
 
     echo ""
-    echo "VMess URL"
-    echo "$vmess"
+    printf "%b%s%b\n" "$C_BOLD$C_MAGENTA" "VMess URL" "$C_RESET"
+    printf "%b%s%b\n" "$C_GREEN" "$vmess" "$C_RESET"
 
     echo ""
-    echo "Subscriptions"
-    [ -n "$base64" ] && printf "%-13s %s\n" "Base64" "$base64"
-    [ -n "$clash" ] && printf "%-13s %s\n" "Clash" "$clash"
-    [ -n "$shadowrocket" ] && printf "%-13s %s\n" "Shadowrocket" "$shadowrocket"
-    [ -n "$auto" ] && printf "%-13s %s\n" "Auto" "$auto"
+    printf "%b%s%b\n" "$C_BOLD$C_MAGENTA" "Subscriptions" "$C_RESET"
+    [ -n "$base64" ] && kv "Base64" "$base64" "$C_GREEN"
+    [ -n "$clash" ] && kv "Clash" "$clash" "$C_CYAN"
+    [ -n "$shadowrocket" ] && kv "Shadowrocket" "$shadowrocket" "$C_CYAN"
+    [ -n "$auto" ] && kv "Auto" "$auto" "$C_GREEN"
 
     echo ""
-    echo "Commands"
-    echo "speed --doctor     # 全链路诊断"
-    echo "speed --logs       # 查看日志"
-    echo "speed --repair     # 清理并重装节点"
+    printf "%b%s%b\n" "$C_BOLD$C_CYAN" "Next Commands" "$C_RESET"
+    printf "  %bspeed%b              进入 Speed Slayer 控制台 / 重启后自动续跑\n" "$C_BOLD$C_GREEN" "$C_RESET"
+    printf "  %bspeed --doctor%b     全链路诊断\n" "$C_BOLD$C_GREEN" "$C_RESET"
+    printf "  %bspeed --logs%b       查看日志\n" "$C_BOLD$C_GREEN" "$C_RESET"
+    printf "  %bspeed --repair%b     清理并重装节点\n" "$C_BOLD$C_GREEN" "$C_RESET"
     echo ""
-    echo "完整信息：/etc/argox/list"
+    printf "%b完整信息：%b/etc/argox/list\n" "$C_DIM" "$C_RESET"
   else
     echo ""
-    echo "未检测到节点信息。"
-    echo "如果刚完成内核安装，请重启后执行：speed"
-    echo "如果需要单独部署节点，请执行：speed --install-argo-vmess"
+    warn "未检测到节点信息。"
+    printf "如果刚完成内核安装，请重启后执行：%bspeed%b\n" "$C_BOLD$C_GREEN" "$C_RESET"
+    printf "如果需要单独部署节点，请执行：%bspeed --install-argo-vmess%b\n" "$C_BOLD$C_GREEN" "$C_RESET"
   fi
 }
 
@@ -1656,11 +1659,11 @@ EOF
 }
 
 menu_section_system() {
-  section "Speed Slayer · 更新与项目"
+  section "Speed Slayer · 更新"
   cat <<'EOF'
 1. 安装 speed 快捷命令
 2. 更新 speed 自身
-3. 项目进度 Roadmap
+3. Roadmap
 0. 返回主页
 EOF
   read -r -p "请选择: " choice
@@ -1686,7 +1689,7 @@ menu_body() {
 3. TCP 加速
 4. 诊断与日志
 5. 修复与清理
-6. 更新与项目进度
+6. 更新
 0. 退出
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EOF

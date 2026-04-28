@@ -389,7 +389,18 @@ run_tcp_backend_visible() {
 native_speed_tcp_tune() {
   local ipv6_choice="$1"
   section "Speed Slayer · TCP 加速配置"
-  progress_step 20 "写入 sysctl 网络参数"
+  mkdir -p "$WORK_DIR"
+
+  progress_step 8 "备份现有网络配置"
+  cp /etc/sysctl.conf "$WORK_DIR/sysctl.conf.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null || true
+
+  progress_step 16 "加载 BBR 内核模块"
+  modprobe tcp_bbr >/dev/null 2>&1 || true
+  cat > /etc/modules-load.d/99-speed-slayer-bbr.conf <<'EOF'
+tcp_bbr
+EOF
+
+  progress_step 28 "写入 TCP / BBR / 队列参数"
   cat > /etc/sysctl.d/99-speed-slayer-tcp.conf <<'EOF'
 # Speed Slayer native TCP profile
 net.core.default_qdisc = fq
@@ -397,33 +408,43 @@ net.ipv4.tcp_congestion_control = bbr
 net.ipv4.tcp_fastopen = 3
 net.ipv4.tcp_slow_start_after_idle = 0
 net.ipv4.tcp_mtu_probing = 1
+net.ipv4.tcp_no_metrics_save = 1
+net.ipv4.tcp_notsent_lowat = 16384
 net.ipv4.tcp_tw_reuse = 1
-net.ipv4.tcp_fin_timeout = 30
+net.ipv4.tcp_fin_timeout = 20
 net.ipv4.tcp_keepalive_time = 600
 net.ipv4.tcp_keepalive_intvl = 30
 net.ipv4.tcp_keepalive_probes = 5
-net.ipv4.tcp_max_syn_backlog = 8192
-net.core.somaxconn = 4096
-net.core.netdev_max_backlog = 5000
-net.core.rmem_max = 16777216
-net.core.wmem_max = 16777216
-net.ipv4.tcp_rmem = 4096 87380 16777216
-net.ipv4.tcp_wmem = 4096 65536 16777216
+net.ipv4.tcp_syn_retries = 3
+net.ipv4.tcp_synack_retries = 3
+net.ipv4.tcp_max_syn_backlog = 16384
+net.ipv4.tcp_max_tw_buckets = 2000000
+net.ipv4.tcp_abort_on_overflow = 0
+net.core.somaxconn = 65535
+net.core.netdev_max_backlog = 250000
+net.core.rmem_max = 134217728
+net.core.wmem_max = 134217728
+net.core.rmem_default = 1048576
+net.core.wmem_default = 1048576
+net.ipv4.tcp_rmem = 4096 87380 134217728
+net.ipv4.tcp_wmem = 4096 65536 134217728
 net.ipv4.ip_local_port_range = 1024 65535
 vm.swappiness = 10
 vm.dirty_ratio = 15
 vm.dirty_background_ratio = 5
 EOF
+
   progress_step 40 "应用 sysctl 参数"
   sysctl --system >/dev/null 2>&1 || sysctl -p /etc/sysctl.d/99-speed-slayer-tcp.conf >/dev/null 2>&1 || true
 
-  progress_step 55 "应用网卡 FQ 队列"
+  progress_step 52 "应用网卡 FQ 队列"
   local dev
   for dev in $(ls /sys/class/net 2>/dev/null | grep -vE '^(lo|docker|veth|br-|virbr|tun|tap)'); do
     tc qdisc replace dev "$dev" root fq >/dev/null 2>&1 || true
+    echo "qdisc[$dev]=$(tc qdisc show dev "$dev" 2>/dev/null | head -1 || true)"
   done
 
-  progress_step 70 "优化文件描述符限制"
+  progress_step 64 "优化文件描述符与 systemd 限制"
   if ! grep -q 'Speed Slayer file descriptor limits' /etc/security/limits.conf 2>/dev/null; then
     cat >> /etc/security/limits.conf <<'EOF'
 # Speed Slayer file descriptor limits
@@ -433,8 +454,30 @@ root soft nofile 1048576
 root hard nofile 1048576
 EOF
   fi
+  mkdir -p /etc/systemd/system.conf.d /etc/systemd/user.conf.d
+  cat > /etc/systemd/system.conf.d/99-speed-slayer-limits.conf <<'EOF'
+[Manager]
+DefaultLimitNOFILE=1048576
+DefaultLimitNPROC=1048576
+EOF
+  cat > /etc/systemd/user.conf.d/99-speed-slayer-limits.conf <<'EOF'
+[Manager]
+DefaultLimitNOFILE=1048576
+DefaultLimitNPROC=1048576
+EOF
+  systemctl daemon-reexec >/dev/null 2>&1 || true
 
-  progress_step 82 "IPv6 策略"
+  progress_step 74 "DNS 稳定性配置"
+  mkdir -p /etc/systemd/resolved.conf.d
+  cat > /etc/systemd/resolved.conf.d/99-speed-slayer-dns.conf <<'EOF'
+[Resolve]
+DNS=1.1.1.1 8.8.8.8
+FallbackDNS=9.9.9.9 1.0.0.1
+DNSSEC=no
+EOF
+  systemctl restart systemd-resolved >/dev/null 2>&1 || true
+
+  progress_step 84 "IPv6 策略"
   if [[ "$ipv6_choice" =~ ^[Yy]$ ]]; then
     cat > /etc/sysctl.d/99-speed-slayer-disable-ipv6.conf <<'EOF'
 # Speed Slayer optional IPv6 disable
@@ -447,9 +490,13 @@ EOF
     rm -f /etc/sysctl.d/99-speed-slayer-disable-ipv6.conf
   fi
 
-  progress_step 92 "验证 BBR / FQ 状态"
+  progress_step 94 "验证 BBR / FQ / limits 状态"
   echo "congestion=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo unknown)"
   echo "qdisc=$(sysctl -n net.core.default_qdisc 2>/dev/null || echo unknown)"
+  echo "nofile=$(ulimit -n 2>/dev/null || echo unknown)"
+  if [ "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || true)" != "bbr" ]; then
+    warn "当前拥塞控制尚未切换为 bbr，可能需要重启或检查内核模块。"
+  fi
   progress_step 100 "TCP 加速配置完成"
 }
 
@@ -531,11 +578,11 @@ run_tcp_optimize() {
 
   section "执行 TCP 网络调优"
   info "正在应用 Speed Slayer TCP 加速配置。"
-  progress_step 15 "BBR v3 / FQ / TCP buffer 参数"
-  progress_step 35 "DNS 净化与网络稳定性修复"
-  progress_step 55 "Realm 首连超时修复"
-  progress_step 75 "IPv6 策略：${ipv6_choice}"
-  run_with_progress "Speed Slayer TCP 加速配置" "$WORK_DIR/tcp-optimize.log" run_tcp_backend_silent "$ipv6_choice"
+  if [ "${SPEED_TCP_MODE:-native}" = "native" ]; then
+    native_speed_tcp_tune "$ipv6_choice" 2>&1 | tee "$WORK_DIR/tcp-optimize.log"
+  else
+    run_with_progress "Speed Slayer TCP 加速配置" "$WORK_DIR/tcp-optimize.log" run_tcp_backend_silent "$ipv6_choice"
+  fi
   progress_step 100 "TCP 调优完成"
   tcp_status_panel || true
 }
@@ -1126,7 +1173,7 @@ update_self() {
 show_roadmap() {
   section "Speed Slayer · Roadmap"
   cat <<'EOF'
-当前进度：约 89%
+当前进度：约 91%
 
 已完成：
 - 一键完整流程与重启续跑
@@ -1150,7 +1197,7 @@ show_roadmap() {
 
 预计剩余：
 - 可用 Beta：已接近，可进入实机回归
-- 接近 V1.0：约 3 轮施工
+- 接近 V1.0：约 2-3 轮施工
 EOF
 }
 

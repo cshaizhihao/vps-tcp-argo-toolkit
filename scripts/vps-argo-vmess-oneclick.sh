@@ -181,7 +181,7 @@ run_with_progress() {
   local code=$?
   set -e
   if [ "$code" -eq 0 ]; then
-    printf "\r${C_GREEN}◆ DONE${C_RESET} ▰▰▰▰▰▰▰▰▰▰ 100%\n"
+    printf "\r${C_GREEN}◆ DONE${C_RESET} ▰▰▰▰▰▰▰▰▰▰ 100%%\n"
   else
     printf "\r${C_RED}◆ FAIL${C_RESET} 见日志：%s\n" "$log_file"
     tail -n 40 "$log_file" || true

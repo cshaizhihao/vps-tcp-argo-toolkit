@@ -1001,6 +1001,49 @@ update_self() {
   "$INSTALLED_BIN" --version || true
 }
 
+show_logs() {
+  require_root
+  local target="${1:-menu}"
+  case "$target" in
+    kernel) tail -n 160 "$WORK_DIR/kernel-install.log" 2>/dev/null || warn "暂无内核安装日志" ;;
+    tcp) tail -n 160 "$WORK_DIR/tcp-optimize.log" 2>/dev/null || warn "暂无 TCP 日志" ;;
+    install) tail -n 160 "$LOG_FILE" 2>/dev/null || warn "暂无安装日志" ;;
+    argo) tail -n 160 /etc/argox/argo.log 2>/dev/null || warn "暂无 Argo 日志" ;;
+    xray) tail -n 160 /etc/argox/xray-error.log 2>/dev/null || warn "暂无 Xray 错误日志" ;;
+    menu)
+      section "Speed Slayer · 日志"
+      echo "1. 安装总日志      $LOG_FILE"
+      echo "2. 内核安装日志    $WORK_DIR/kernel-install.log"
+      echo "3. TCP 调优日志    $WORK_DIR/tcp-optimize.log"
+      echo "4. Argo 日志       /etc/argox/argo.log"
+      echo "5. Xray 错误日志   /etc/argox/xray-error.log"
+      echo "0. 返回"
+      read -r -p "请选择: " log_choice
+      case "$log_choice" in
+        1) show_logs install ;;
+        2) show_logs kernel ;;
+        3) show_logs tcp ;;
+        4) show_logs argo ;;
+        5) show_logs xray ;;
+        *) return 0 ;;
+      esac
+      ;;
+    *) err "未知日志类型：$target"; return 1 ;;
+  esac
+}
+
+repair_install() {
+  require_root
+  section "Speed Slayer · 修复"
+  warn "将清理 Argo 服务/进程/配置残留，然后重新部署 VMess+WS。"
+  if ! confirm_action "是否继续修复？默认回车 = Y"; then
+    warn "已取消修复。"
+    return 0
+  fi
+  clean_argo_state
+  install_argo_vmess_ws
+}
+
 doctor() {
   require_root
   check_environment || true
@@ -1032,6 +1075,8 @@ Commands:
   --summary              输出结果摘要
   --health               安装后健康检查
   --doctor               一键诊断：环境检测 + 结果摘要 + 健康检查
+  --logs [type]          查看日志：install/kernel/tcp/argo/xray
+  --repair               清理残留并重装 Argo VMess+WS
   --update-self          更新 /usr/local/bin/speed 到 GitHub 最新版本
   --version              显示当前 Speed Slayer 版本
   -h, --help             显示帮助
@@ -1075,7 +1120,9 @@ menu_body() {
 11. 结果摘要
 12. 健康检查
 13. 一键诊断 doctor
-14. 更新 speed 自身
+14. 查看日志
+15. 修复 Argo 安装
+16. 更新 speed 自身
 0. 退出
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EOF
@@ -1094,7 +1141,9 @@ EOF
     11) summarize_result ;;
     12) health_check ;;
     13) doctor ;;
-    14) update_self ;;
+    14) show_logs ;;
+    15) repair_install ;;
+    16) update_self ;;
     0) exit 0 ;;
     *) err "无效选择"; exit 1 ;;
   esac
@@ -1134,6 +1183,8 @@ case "${1:-}" in
   --summary) summarize_result ;;
   --health) health_check ;;
   --doctor) doctor ;;
+  --logs) show_logs "${2:-menu}" ;;
+  --repair) repair_install ;;
   --update-self) update_self ;;
   --version) echo "Speed Slayer ${SPEED_SLAYER_VERSION}" ;;
   -h|--help) usage ;;

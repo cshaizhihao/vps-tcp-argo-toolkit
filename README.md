@@ -130,6 +130,9 @@ speed --show-url             # 查看节点 / 订阅 URL
 speed --summary              # 输出结果摘要
 speed --health               # 安装后健康检查
 speed --doctor               # 一键诊断：环境检测 + 结果摘要 + 健康检查
+speed --logs                 # 日志菜单
+speed --logs argo            # 直接查看 Argo 日志
+speed --repair               # 清理残留并重装 Argo VMess+WS
 speed --install-shortcut     # 安装 speed 快捷命令
 speed --update-self          # 更新 speed 自身
 speed --version              # 查看当前版本
@@ -145,6 +148,20 @@ bash scripts/vps-argo-vmess-oneclick.sh --doctor
 ```
 
 ---
+
+## 修复与日志
+
+```bash
+speed --logs
+speed --logs install
+speed --logs kernel
+speed --logs tcp
+speed --logs argo
+speed --logs xray
+speed --repair
+```
+
+`--repair` 会执行清理、备份和 Argo VMess+WS 重装，适合重复安装失败或残留污染场景。
 
 ## 重复安装与自动清理
 

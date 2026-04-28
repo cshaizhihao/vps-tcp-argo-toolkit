@@ -137,6 +137,8 @@ Argo 部分基于 ArgoX，但强制只启用：
 INSTALL_PROTOCOLS=(f)
 ```
 
+注意：脚本调用 ArgoX 时只使用 `-f config`，不会附加 `-l`。因为 ArgoX 的 `-l` 会触发极速安装逻辑，可能覆盖协议选择并安装多余协议。
+
 其中 `f` 对应：
 
 ```text

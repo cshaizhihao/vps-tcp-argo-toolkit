@@ -164,11 +164,11 @@ install_argo_vmess_ws() {
   write_argox_vmess_config
   info "启动 ArgoX 非交互安装，仅启用 VMess + WS"
   mkdir -p "$WORK_DIR"
-  # -f: source config file; -l: Chinese output. ArgoX will install cloudflared/xray/nginx and export node URLs.
+  # -f: source config file. Do NOT add -l here: in ArgoX, -l triggers quick install and can reset protocol selection.
   if [ -s "$ARGOX_SCRIPT_LOCAL" ]; then
-    bash "$ARGOX_SCRIPT_LOCAL" -f "$CONFIG_FILE" -l 2>&1 | tee "$LOG_FILE"
+    bash "$ARGOX_SCRIPT_LOCAL" -f "$CONFIG_FILE" 2>&1 | tee "$LOG_FILE"
   else
-    bash <(curl -fsSL "${REPO_RAW_BASE}/scripts/upstream/argox.sh") -f "$CONFIG_FILE" -l 2>&1 | tee "$LOG_FILE"
+    bash <(curl -fsSL "${REPO_RAW_BASE}/scripts/upstream/argox.sh") -f "$CONFIG_FILE" 2>&1 | tee "$LOG_FILE"
   fi
   success "Argo VMess+WS 安装流程结束"
   show_argo_vmess_ws_info || true

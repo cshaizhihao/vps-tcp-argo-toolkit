@@ -203,50 +203,216 @@ EOF
   info "协议固定：VMess + WebSocket；WS Path：/${ws_path}-vm；内部端口：${start_port}；Nginx 端口：${nginx_port}"
 }
 
-verify_vmess_only() {
-  local inbound="/etc/argox/inbound.json"
-  if [ ! -s "$inbound" ]; then
-    err "未找到 ArgoX inbound 配置：$inbound"
-    return 1
-  fi
-  if grep -Eq 'reality|hysteria|trojan|shadowsocks|vless|xhttp|grpc|ss-ws|trojan-ws|vless-ws' "$inbound"; then
-    err "检测到非 VMess+WS 协议残留，拒绝标记为成功。"
-    echo "建议执行：speed --clean-argo，然后重新执行 speed --install-argo-vmess"
-    return 1
-  fi
-  if ! grep -Eq '"protocol"[[:space:]]*:[[:space:]]*"vmess"' "$inbound" || ! grep -Eq '"network"[[:space:]]*:[[:space:]]*"ws"' "$inbound"; then
-    err "未确认到 VMess + WS 配置。"
+detect_arch() {
+  case "$(uname -m)" in
+    x86_64|amd64) echo "amd64|64" ;;
+    aarch64|arm64) echo "arm64|arm64-v8a" ;;
+    *) err "暂只支持 x86_64 / arm64：$(uname -m)"; return 1 ;;
+  esac
+}
+
+install_base_deps() {
+  if command -v apt-get >/dev/null 2>&1; then
+    apt-get update -y >/dev/null 2>&1 || true
+    apt-get install -y curl wget unzip nginx openssl ca-certificates iproute2 >/dev/null 2>&1
+  elif command -v yum >/dev/null 2>&1; then
+    yum install -y curl wget unzip nginx openssl ca-certificates iproute >/dev/null 2>&1
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf install -y curl wget unzip nginx openssl ca-certificates iproute >/dev/null 2>&1
+  else
+    err "暂不支持当前系统包管理器"
     return 1
   fi
 }
 
-extract_vmess_only() {
-  if [ -s /etc/argox/list ]; then
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo " Speed Slayer · VMess+WS 输出"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    grep -E 'vmess://|https?://.*/(base64|auto|clash|shadowrocket)' /etc/argox/list | grep -vE 'vless|trojan|hysteria|ss://' || true
-    echo ""
-    echo "完整原始输出：/etc/argox/list"
-  else
-    warn "尚未生成 /etc/argox/list"
+download_speed_binaries() {
+  local archs cf_arch xray_arch tmp
+  archs="$(detect_arch)"; cf_arch="${archs%%|*}"; xray_arch="${archs##*|}"
+  mkdir -p /etc/argox /etc/argox/subscribe
+  if [ ! -x /etc/argox/cloudflared ]; then
+    curl -LfsS "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${cf_arch}" -o /etc/argox/cloudflared
+    chmod +x /etc/argox/cloudflared
+  fi
+  if [ ! -x /etc/argox/xray ]; then
+    tmp="$(mktemp -d)"
+    curl -LfsS "https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-${xray_arch}.zip" -o "$tmp/xray.zip"
+    unzip -qo "$tmp/xray.zip" -d "$tmp"
+    mv "$tmp/xray" /etc/argox/xray
+    [ -f "$tmp/geoip.dat" ] && mv "$tmp/geoip.dat" /etc/argox/geoip.dat || true
+    [ -f "$tmp/geosite.dat" ] && mv "$tmp/geosite.dat" /etc/argox/geosite.dat || true
+    chmod +x /etc/argox/xray
+    rm -rf "$tmp"
   fi
 }
+
+load_speed_config() {
+  [ -s "$CONFIG_FILE" ] && . "$CONFIG_FILE"
+  UUID="${UUID:-$(gen_uuid)}"
+  WS_PATH="${WS_PATH:-$DEFAULT_WS_PATH}"
+  VMESS_WS_PORT="${VMESS_WS_PORT:-${START_PORT:-$DEFAULT_START_PORT}}"
+  NGINX_PORT="${NGINX_PORT:-$DEFAULT_NGINX_PORT}"
+  NODE_NAME="${NODE_NAME:-Speed-Slayer}"
+}
+
+write_native_xray_config() {
+  cat > /etc/argox/inbound.json <<EOF
+{"log":{"loglevel":"warning","access":"/etc/argox/xray-access.log","error":"/etc/argox/xray-error.log"},"inbounds":[{"tag":"${NODE_NAME} vmess-ws","listen":"127.0.0.1","port":${VMESS_WS_PORT},"protocol":"vmess","settings":{"clients":[{"id":"${UUID}","alterId":0}]},"streamSettings":{"network":"ws","wsSettings":{"path":"/${WS_PATH}-vm"}},"sniffing":{"enabled":true,"destOverride":["http","tls"]}}],"outbounds":[{"protocol":"freedom","tag":"direct"}]}
+EOF
+}
+
+json_escape() { python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().rstrip("\n"))[1:-1])'; }
+
+make_vmess_url() {
+  local host="$1" server="${SERVER:-www.visa.com}" port="${SERVER_PORT:-443}" payload
+  payload=$(cat <<EOF
+{"v":"2","ps":"$(printf '%s' "${NODE_NAME} vmess-ws" | json_escape)","add":"$(printf '%s' "$server" | json_escape)","port":"${port}","id":"${UUID}","aid":"0","scy":"none","net":"ws","type":"none","host":"$(printf '%s' "$host" | json_escape)","path":"/${WS_PATH}-vm","tls":"tls","sni":"$(printf '%s' "$host" | json_escape)","fp":"chrome"}
+EOF
+)
+  printf 'vmess://%s\n' "$(printf '%s' "$payload" | base64 -w0)"
+}
+
+write_native_subscriptions() {
+  local host="$1" vmess_url
+  mkdir -p /etc/argox/subscribe
+  vmess_url="$(make_vmess_url "$host")"
+  printf '%s\n' "$vmess_url" > /etc/argox/vmess.txt
+  printf '%s\n' "$vmess_url" | base64 -w0 > /etc/argox/subscribe/base64
+  cat > /etc/argox/subscribe/clash <<EOF
+proxies:
+  - name: "${NODE_NAME} vmess-ws"
+    type: vmess
+    server: "${SERVER:-www.visa.com}"
+    port: ${SERVER_PORT:-443}
+    uuid: "${UUID}"
+    alterId: 0
+    cipher: none
+    tls: true
+    servername: "${host}"
+    network: ws
+    ws-opts:
+      path: "/${WS_PATH}-vm"
+      headers: { Host: "${host}" }
+EOF
+  cp /etc/argox/subscribe/base64 /etc/argox/subscribe/shadowrocket
+  cat > /etc/argox/list <<EOF
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Speed Slayer · VMess+WS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Protocol : VMess
+Network  : WebSocket
+UUID     : ${UUID}
+Host/SNI : ${host}
+Path     : /${WS_PATH}-vm
+CDN      : ${SERVER:-www.visa.com}:${SERVER_PORT:-443}
+
+VMess URL:
+${vmess_url}
+
+Subscriptions:
+https://${host}/${UUID}/base64
+https://${host}/${UUID}/clash
+https://${host}/${UUID}/shadowrocket
+https://${host}/${UUID}/auto
+EOF
+}
+
+write_native_nginx_config() {
+  cat > /etc/argox/nginx.conf <<EOF
+worker_processes auto;
+events { worker_connections 1024; }
+http { server { listen 127.0.0.1:${NGINX_PORT}; server_name _;
+location /${WS_PATH}-vm { proxy_pass http://127.0.0.1:${VMESS_WS_PORT}; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; proxy_set_header Host \$host; }
+location /${UUID}/base64 { alias /etc/argox/subscribe/base64; default_type text/plain; }
+location /${UUID}/clash { alias /etc/argox/subscribe/clash; default_type text/plain; }
+location /${UUID}/shadowrocket { alias /etc/argox/subscribe/shadowrocket; default_type text/plain; }
+location /${UUID}/auto { alias /etc/argox/subscribe/base64; default_type text/plain; }
+location / { return 200 'Speed Slayer OK'; }
+} }
+EOF
+}
+
+write_native_services() {
+  cat > /etc/systemd/system/xray.service <<EOF
+[Unit]
+Description=Speed Slayer Xray VMess WS
+After=network.target
+[Service]
+User=root
+ExecStart=/etc/argox/xray run -c /etc/argox/inbound.json
+Restart=on-failure
+RestartSec=3
+[Install]
+WantedBy=multi-user.target
+EOF
+  cat > /etc/systemd/system/argo.service <<EOF
+[Unit]
+Description=Speed Slayer Cloudflare Tunnel
+After=network.target xray.service
+[Service]
+Type=simple
+ExecStart=/etc/argox/cloudflared tunnel --edge-ip-version auto --no-autoupdate --url http://127.0.0.1:${NGINX_PORT} --metrics 127.0.0.1:0
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/etc/argox/argo.log
+StandardError=append:/etc/argox/argo.log
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
+fetch_quick_tunnel_domain() {
+  local domain i metrics
+  for i in $(seq 1 45); do
+    domain="$(grep -Eo 'https://[-a-zA-Z0-9.]+\.trycloudflare\.com' /etc/argox/argo.log 2>/dev/null | tail -n1 | sed 's#https://##' || true)"
+    [ -n "$domain" ] && { echo "$domain"; return 0; }
+    metrics="$(ss -lntp 2>/dev/null | awk '/cloudflared/ {print $4}' | awk -F: '{print $NF}' | tail -n1)"
+    [ -n "$metrics" ] && domain="$(curl -fsS "http://127.0.0.1:${metrics}/quicktunnel" 2>/dev/null | awk -F'"' '{print $4}' || true)"
+    [[ "${domain:-}" =~ trycloudflare\.com$ ]] && { echo "$domain"; return 0; }
+    sleep 1
+  done
+  return 1
+}
+
+native_argo_install() {
+  load_speed_config
+  install_base_deps
+  download_speed_binaries
+  write_native_xray_config
+  write_native_nginx_config
+  write_native_services
+  systemctl daemon-reload
+  systemctl enable --now xray >/dev/null 2>&1
+  nginx -t -c /etc/argox/nginx.conf >/dev/null 2>&1
+  pkill -f 'nginx.*argox/nginx.conf' >/dev/null 2>&1 || true
+  nginx -c /etc/argox/nginx.conf
+  : > /etc/argox/argo.log
+  systemctl enable --now argo >/dev/null 2>&1
+  local host
+  host="${ARGO_DOMAIN:-}"
+  [ -n "$host" ] || host="$(fetch_quick_tunnel_domain)"
+  [ -n "$host" ] || { err "未获取到 Argo 临时域名，查看 /etc/argox/argo.log"; return 1; }
+  write_native_subscriptions "$host"
+}
+
+verify_vmess_only() {
+  local inbound="/etc/argox/inbound.json"
+  [ -s "$inbound" ] || { err "未找到 inbound 配置：$inbound"; return 1; }
+  if grep -Eqi 'reality|hysteria|trojan|shadowsocks|vless|xhttp|grpc|ss-ws|trojan-ws|vless-ws' "$inbound"; then
+    err "检测到非 VMess+WS 协议残留，拒绝标记为成功。"
+    return 1
+  fi
+  grep -Eq '"protocol"[[:space:]]*:[[:space:]]*"vmess"' "$inbound"
+  grep -Eq '"network"[[:space:]]*:[[:space:]]*"ws"' "$inbound"
+}
+
+extract_vmess_only() { [ -s /etc/argox/list ] && cat /etc/argox/list || warn "尚未生成 /etc/argox/list"; }
 
 install_argo_vmess_ws() {
   require_root
+  clean_argo_state >/dev/null 2>&1 || true
   write_argox_vmess_config
-  info "启动 Argo VMess+WS 安装（隐藏上游瀑布日志，仅显示进度）"
-  mkdir -p "$WORK_DIR"
-  # -f: source config file. Do NOT add -l here: in ArgoX, -l triggers quick install and can reset protocol selection.
-  if [ -s "$ARGOX_SCRIPT_LOCAL" ]; then
-    run_with_progress "安装 Argo VMess+WS" "$LOG_FILE" bash "$ARGOX_SCRIPT_LOCAL" -f "$CONFIG_FILE"
-  else
-    local tmp_argox
-    tmp_argox="$(download_script "scripts/upstream/argox.sh")"
-    run_with_progress "安装 Argo VMess+WS" "$LOG_FILE" bash "$tmp_argox" -f "$CONFIG_FILE"
-  fi
+  info "启动原生 Argo VMess+WS 安装（不再调用 ArgoX 全家桶）"
+  run_with_progress "安装 Argo VMess+WS" "$LOG_FILE" native_argo_install
   verify_vmess_only
   success "Argo VMess+WS 安装流程结束"
   extract_vmess_only || true

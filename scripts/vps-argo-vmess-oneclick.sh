@@ -1001,6 +1001,37 @@ update_self() {
   "$INSTALLED_BIN" --version || true
 }
 
+show_roadmap() {
+  section "Speed Slayer · Roadmap"
+  cat <<'EOF'
+当前进度：约 72%
+
+已完成：
+- 一键完整流程与重启续跑
+- BBR v3 / TCP 加速配置
+- Argo VMess+WS 部署与订阅生成
+- 重复安装预清理与 JSON 校验
+- 日志菜单与修复命令
+- 版本号与自更新
+- 产品化文案清理
+
+正在施工：
+- 稳定性与失败提示收口
+- 重复安装与残留处理继续加固
+- 菜单结构产品化
+
+下一步：
+1. 收拢主页为二级菜单
+2. 增强 doctor：端口、服务、配置、订阅全链路诊断
+3. 输出最终安装摘要与复制友好节点信息
+4. README / CHANGELOG / 发布版本收口
+
+预计剩余：
+- 可用 Beta：约 2-3 轮施工
+- 接近 V1.0：约 5-7 轮施工
+EOF
+}
+
 show_logs() {
   require_root
   local target="${1:-menu}"
@@ -1077,6 +1108,7 @@ Commands:
   --doctor               一键诊断：环境检测 + 结果摘要 + 健康检查
   --logs [type]          查看日志：install/kernel/tcp/argo/xray
   --repair               清理残留并重装 Argo VMess+WS
+  --roadmap              查看项目进度与下一步计划
   --update-self          更新 /usr/local/bin/speed 到 GitHub 最新版本
   --version              显示当前 Speed Slayer 版本
   -h, --help             显示帮助
@@ -1122,7 +1154,8 @@ menu_body() {
 13. 一键诊断 doctor
 14. 查看日志
 15. 修复 Argo 安装
-16. 更新 speed 自身
+16. 项目进度 Roadmap
+17. 更新 speed 自身
 0. 退出
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EOF
@@ -1143,7 +1176,8 @@ EOF
     13) doctor ;;
     14) show_logs ;;
     15) repair_install ;;
-    16) update_self ;;
+    16) show_roadmap ;;
+    17) update_self ;;
     0) exit 0 ;;
     *) err "无效选择"; exit 1 ;;
   esac
@@ -1185,6 +1219,7 @@ case "${1:-}" in
   --doctor) doctor ;;
   --logs) show_logs "${2:-menu}" ;;
   --repair) repair_install ;;
+  --roadmap) show_roadmap ;;
   --update-self) update_self ;;
   --version) echo "Speed Slayer ${SPEED_SLAYER_VERSION}" ;;
   -h|--help) usage ;;

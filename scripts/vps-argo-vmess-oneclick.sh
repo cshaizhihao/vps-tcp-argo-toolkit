@@ -115,7 +115,12 @@ install_shortcut() {
   require_root
   mkdir -p "$WORK_DIR"
   if [ -s "${BASH_SOURCE[0]}" ]; then
-    cp "${BASH_SOURCE[0]}" "$INSTALLED_BIN"
+    local src_path dst_path
+    src_path="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+    dst_path="$(readlink -f "$INSTALLED_BIN" 2>/dev/null || echo "$INSTALLED_BIN")"
+    if [ "$src_path" != "$dst_path" ]; then
+      cp "${BASH_SOURCE[0]}" "$INSTALLED_BIN"
+    fi
   else
     curl -fsSL "${REPO_RAW_BASE}/scripts/vps-argo-vmess-oneclick.sh" -o "$INSTALLED_BIN"
   fi
@@ -172,7 +177,7 @@ run_with_progress() {
   local frames=('▱▱▱▱▱▱▱▱▱▱ 0%' '▰▱▱▱▱▱▱▱▱▱ 10%' '▰▰▱▱▱▱▱▱▱▱ 20%' '▰▰▰▱▱▱▱▱▱▱ 30%' '▰▰▰▰▱▱▱▱▱▱ 40%' '▰▰▰▰▰▱▱▱▱▱ 50%' '▰▰▰▰▰▰▱▱▱▱ 60%' '▰▰▰▰▰▰▰▱▱▱ 70%' '▰▰▰▰▰▰▰▰▱▱ 80%' '▰▰▰▰▰▰▰▰▰▱ 90%')
   local i=0
   while kill -0 "$pid" 2>/dev/null; do
-    printf "\r${C_CYAN}◆ RUN ${C_RESET}%s" "${frames[$((i % ${#frames[@]}))]}"
+    printf "\r%b◆ RUN %b%s" "$C_CYAN" "$C_RESET" "${frames[$((i % ${#frames[@]}))]}"
     i=$((i + 1))
     sleep 1
   done
@@ -181,9 +186,9 @@ run_with_progress() {
   local code=$?
   set -e
   if [ "$code" -eq 0 ]; then
-    printf "\r${C_GREEN}◆ DONE${C_RESET} ▰▰▰▰▰▰▰▰▰▰ 100%%\n"
+    printf "\r%b◆ DONE%b %s\n" "$C_GREEN" "$C_RESET" "▰▰▰▰▰▰▰▰▰▰ 100%"
   else
-    printf "\r${C_RED}◆ FAIL${C_RESET} 见日志：%s\n" "$log_file"
+    printf "\r%b◆ FAIL%b 见日志：%s\n" "$C_RED" "$C_RESET" "$log_file"
     tail -n 40 "$log_file" || true
     return "$code"
   fi

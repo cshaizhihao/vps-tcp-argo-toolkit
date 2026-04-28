@@ -421,12 +421,34 @@ install_speedtest_cli() {
 
 speedtest_bandwidth_mbps() {
   install_speedtest_cli || return 1
-  local out mbps
-  out="$(timeout 90 speedtest --accept-license --accept-gdpr 2>&1 || true)"
-  echo "$out" > "$WORK_DIR/speedtest.log"
-  mbps="$(printf '%s\n' "$out" | awk '/Upload:/ {for(i=1;i<=NF;i++) if($i ~ /^[0-9]+(\.[0-9]+)?$/){print int($i); exit}}')"
-  [ -n "$mbps" ] && [ "$mbps" -gt 0 ] 2>/dev/null || return 1
-  echo "$mbps"
+  local servers sid out mbps server_name attempt=0
+  : > "$WORK_DIR/speedtest.log"
+  echo "Speed Slayer Speedtest - $(date -Is 2>/dev/null || date)" >> "$WORK_DIR/speedtest.log"
+  servers="$(timeout 25 speedtest --accept-license --accept-gdpr --servers 2>/dev/null | sed -nE 's/^[[:space:]]*([0-9]+).*/\1/p' | head -n 8 || true)"
+  if [ -z "$servers" ]; then
+    servers="auto"
+  fi
+  for sid in $servers; do
+    attempt=$((attempt + 1))
+    if [ "$sid" = "auto" ]; then
+      out="$(timeout 120 speedtest --accept-license --accept-gdpr 2>&1 || true)"
+    else
+      out="$(timeout 120 speedtest --accept-license --accept-gdpr --server-id="$sid" 2>&1 || true)"
+    fi
+    {
+      echo ""
+      echo "===== attempt ${attempt} server ${sid} ====="
+      echo "$out"
+    } >> "$WORK_DIR/speedtest.log"
+    mbps="$(printf '%s\n' "$out" | awk '/Upload:/ {for(i=1;i<=NF;i++) if($i ~ /^[0-9]+(\.[0-9]+)?$/){print int($i); exit}}')"
+    server_name="$(printf '%s\n' "$out" | sed -n 's/.*Server:[[:space:]]*//p' | head -1 | sed 's/[[:space:]]*$//')"
+    if [ -n "$mbps" ] && [ "$mbps" -gt 0 ] 2>/dev/null && ! printf '%s\n' "$out" | grep -qiE 'FAILED|error|timeout'; then
+      SPEEDTEST_SERVER="$server_name"
+      echo "$mbps"
+      return 0
+    fi
+  done
+  return 1
 }
 
 netcheck_one() {
@@ -475,7 +497,19 @@ run_speedtest_cmd() {
     echo "日志：$WORK_DIR/speedtest.log"
     return 1
   fi
-  speedtest --accept-license --accept-gdpr | tee "$WORK_DIR/speedtest.log"
+  local measured
+  if measured="$(speedtest_bandwidth_mbps)"; then
+    local color
+    color="$(bandwidth_color "$measured")"
+    printf "%b◆ SPEEDTEST%b Upload: %b%s Mbps%b
+" "$C_GREEN" "$C_RESET" "$color" "$measured" "$C_RESET"
+    [ -n "${SPEEDTEST_SERVER:-}" ] && echo "Server: $SPEEDTEST_SERVER"
+    echo "日志：$WORK_DIR/speedtest.log"
+  else
+    err "Speedtest 测速失败。日志：$WORK_DIR/speedtest.log"
+    tail -n 80 "$WORK_DIR/speedtest.log" 2>/dev/null || true
+    return 1
+  fi
 }
 
 detect_bandwidth_profile() {
@@ -494,7 +528,7 @@ detect_bandwidth_profile() {
     if measured="$(speedtest_bandwidth_mbps 2>/dev/null)" && [ -n "$measured" ]; then
       BANDWIDTH_MBPS="$measured"
       BANDWIDTH_SOURCE="measured"
-      BANDWIDTH_NOTE="Ookla Speedtest Upload 实测"
+      BANDWIDTH_NOTE="Ookla Speedtest Upload 实测${SPEEDTEST_SERVER:+ · $SPEEDTEST_SERVER}"
       return 0
     fi
     BANDWIDTH_NOTE="Speedtest 未成功，已回退默认值；日志：$WORK_DIR/speedtest.log"
@@ -546,6 +580,15 @@ clean_tcp_conflicts() {
   done
 }
 
+bandwidth_color() {
+  local mbps="$1"
+  if [ "$mbps" -ge 2000 ] 2>/dev/null; then echo "$C_GREEN"
+  elif [ "$mbps" -ge 500 ] 2>/dev/null; then echo "$C_CYAN"
+  elif [ "$mbps" -ge 100 ] 2>/dev/null; then echo "$C_YELLOW"
+  else echo "$C_RED"
+  fi
+}
+
 native_speed_tcp_tune() {
   local ipv6_choice="$1"
   section "Speed Slayer · TCP 加速配置"
@@ -569,7 +612,10 @@ native_speed_tcp_tune() {
   region="${SPEED_REGION:-global}"
   buffer_mb="$(calculate_tcp_buffer_mb "$bandwidth" "$mem_mb")"
   buffer_bytes=$((buffer_mb * 1024 * 1024))
-  echo "Bandwidth=${bandwidth}Mbps Source=${BANDWIDTH_SOURCE} Region=${region} Buffer=${buffer_mb}MB"
+  local bw_color
+  bw_color="$(bandwidth_color "$bandwidth")"
+  printf "Bandwidth=%b%sMbps%b Source=%s Region=%s Buffer=%sMB
+" "$bw_color" "$bandwidth" "$C_RESET" "$BANDWIDTH_SOURCE" "$region" "$buffer_mb"
   [ -n "$BANDWIDTH_NOTE" ] && echo "BandwidthNote=${BANDWIDTH_NOTE}"
 
   progress_step 34 "[步骤 3/6] 清理配置冲突"

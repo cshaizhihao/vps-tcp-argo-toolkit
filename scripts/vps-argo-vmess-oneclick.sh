@@ -210,15 +210,40 @@ run_tcp_backend_visible() {
   fetch_or_run_script "$TCP_SCRIPT_LOCAL" "scripts/tcp-one-click-optimize.sh"
 }
 
+prepare_tcp_core_lib() {
+  local src="$1" out
+  out="$(mktemp /tmp/speed-slayer-tcp-core.XXXXXX.sh)"
+  # 删除上游脚本最后的 main "$@"，只加载函数，不启动菜单。
+  sed '/^[[:space:]]*main[[:space:]]*"\$@"[[:space:]]*$/d' "$src" > "$out"
+  bash -n "$out"
+  echo "$out"
+}
+
 run_tcp_backend_silent() {
   local ipv6_choice="$1"
+  local src core
   if [ -s "$TCP_SCRIPT_LOCAL" ]; then
-    printf '%s\n' "$ipv6_choice" | bash "$TCP_SCRIPT_LOCAL"
+    src="$TCP_SCRIPT_LOCAL"
   else
-    local tmp_script
-    tmp_script="$(download_script "scripts/tcp-one-click-optimize.sh")"
-    printf '%s\n' "$ipv6_choice" | bash "$tmp_script"
+    src="$(download_script "scripts/tcp-one-click-optimize.sh")"
   fi
+  core="$(prepare_tcp_core_lib "$src")"
+  # shellcheck disable=SC1090
+  source "$core"
+  AUTO_MODE=1
+  echo "[15%] 调用 bbr_configure_direct"
+  bbr_configure_direct
+  echo "[35%] 调用 dns_purify_and_harden"
+  dns_purify_and_harden
+  echo "[55%] 调用 realm_fix_timeout"
+  realm_fix_timeout
+  if [[ "$ipv6_choice" =~ ^[Yy]$ ]]; then
+    echo "[75%] 调用 disable_ipv6_permanent"
+    disable_ipv6_permanent
+  else
+    echo "[75%] 跳过 IPv6 永久禁用"
+  fi
+  AUTO_MODE=""
 }
 
 run_tcp_optimize() {
@@ -255,7 +280,7 @@ run_tcp_optimize() {
   progress_step 35 "DNS 净化与网络稳定性修复"
   progress_step 55 "Realm 首连超时修复"
   progress_step 75 "IPv6 策略：${ipv6_choice}"
-  run_with_progress "Speed Slayer TCP 网络调优" "$WORK_DIR/tcp-optimize.log" run_tcp_backend_silent "$ipv6_choice"
+  run_with_progress "Speed Slayer TCP 核心函数调优" "$WORK_DIR/tcp-optimize.log" run_tcp_backend_silent "$ipv6_choice"
   progress_step 100 "TCP 调优完成"
   tcp_status_panel || true
 }

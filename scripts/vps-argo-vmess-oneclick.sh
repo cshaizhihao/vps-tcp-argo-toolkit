@@ -429,6 +429,42 @@ speedtest_bandwidth_mbps() {
   echo "$mbps"
 }
 
+netcheck_one() {
+  local label="$1" cmd="$2" hint="${3:-}"
+  if eval "$cmd" >/dev/null 2>&1; then
+    printf "%b[OK]%b   %s\n" "$C_GREEN" "$C_RESET" "$label"
+  else
+    printf "%b[FAIL]%b %s\n" "$C_RED" "$C_RESET" "$label"
+    [ -n "$hint" ] && printf "       建议：%s\n" "$hint"
+    return 1
+  fi
+}
+
+run_netcheck() {
+  require_root
+  section "Speed Slayer · Netcheck"
+  local failed=0
+  mkdir -p "$WORK_DIR"
+  {
+    echo "Speed Slayer Netcheck - $(date -Is 2>/dev/null || date)"
+    echo "Kernel: $(uname -r)"
+    echo "Default route: $(ip route show default 2>/dev/null | head -1)"
+    echo "IPv4: $(curl -4fsS --max-time 8 https://api.ipify.org 2>/dev/null || echo unknown)"
+    echo "IPv6: $(curl -6fsS --max-time 8 https://api64.ipify.org 2>/dev/null || echo unavailable)"
+  } > "$WORK_DIR/netcheck.log"
+
+  netcheck_one "IPv4 出站" 'curl -4fsS --max-time 8 https://api.ipify.org' "检查 DNS / 默认路由 / 防火墙" || failed=1
+  netcheck_one "DNS 解析" 'getent hosts github.com || nslookup github.com' "检查 /etc/resolv.conf 或 systemd-resolved" || failed=1
+  netcheck_one "GitHub Raw 访问" 'curl -fsS --max-time 12 https://raw.githubusercontent.com/cshaizhihao/speed-slayer/main/README.md' "GitHub 访问异常会影响自更新" || failed=1
+  netcheck_one "Cloudflare 访问" 'curl -fsS --max-time 12 https://www.cloudflare.com/cdn-cgi/trace' "Cloudflare 异常会影响 Argo Tunnel" || failed=1
+  netcheck_one "HTTPS/443 出站" 'timeout 8 bash -c "</dev/tcp/1.1.1.1/443"' "检查机房出站 443" || failed=1
+  if command -v ping >/dev/null 2>&1; then
+    netcheck_one "ICMP 延迟" 'ping -c 3 -W 2 1.1.1.1' "ICMP 失败不一定影响代理，但可用于判断线路" || true
+  fi
+  echo "日志：$WORK_DIR/netcheck.log"
+  [ "$failed" -eq 0 ] && success "Netcheck 完成：关键出站链路正常。" || { err "Netcheck 完成：发现关键链路异常。"; return 1; }
+}
+
 run_speedtest_cmd() {
   require_root
   section "Speed Slayer · Speedtest"
@@ -1310,7 +1346,7 @@ update_self() {
 show_roadmap() {
   section "Speed Slayer · Roadmap"
   cat <<'EOF'
-当前进度：约 96%
+当前进度：约 97%
 
 已完成：
 - 一键完整流程与重启续跑
@@ -1334,7 +1370,7 @@ show_roadmap() {
 
 预计剩余：
 - 可用 Beta：已接近，可进入实机回归
-- 接近 V1.0：约 1-2 轮施工
+- 接近 V1.0：约 1 轮施工
 EOF
 }
 
@@ -1470,6 +1506,7 @@ Commands:
   --repair               清理残留并重装 Argo VMess+WS
   --roadmap              查看项目进度与下一步计划
   --speedtest            执行 Ookla Speedtest 测速
+  --netcheck             检查 DNS / GitHub / Cloudflare / 出站连通性
   --update-self          更新 /usr/local/bin/speed 到 GitHub 最新版本
   --version              显示当前 Speed Slayer 版本
   -h, --help             显示帮助
@@ -1541,6 +1578,7 @@ menu_section_diag() {
 4. 健康检查
 5. 查看日志
 6. Speedtest 测速
+7. Netcheck 网络检测
 0. 返回主页
 EOF
   read -r -p "请选择: " choice
@@ -1551,6 +1589,7 @@ EOF
     4) health_check ;;
     5) show_logs ;;
     6) run_speedtest_cmd ;;
+    7) run_netcheck ;;
     0) menu_body ;;
     *) err "无效选择"; return 1 ;;
   esac
@@ -1642,6 +1681,7 @@ case "${1:-}" in
   --repair) repair_install ;;
   --roadmap) show_roadmap ;;
   --speedtest) run_speedtest_cmd ;;
+  --netcheck) run_netcheck ;;
   --update-self) update_self ;;
   --version) echo "Speed Slayer ${SPEED_SLAYER_VERSION}" ;;
   -h|--help) usage ;;

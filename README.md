@@ -135,6 +135,7 @@ speed --logs argo            # 直接查看 Argo 日志
 speed --repair               # 清理残留并重装 Argo VMess+WS
 speed --roadmap              # 查看项目进度与下一步计划
 speed --speedtest            # 执行 Ookla Speedtest 测速
+speed --netcheck             # DNS / GitHub / Cloudflare / 出站连通性检测
 speed --install-shortcut     # 安装 speed 快捷命令
 speed --update-self          # 更新 speed 自身
 speed --version              # 查看当前版本
@@ -173,6 +174,15 @@ Clash        https://xxx/clash
 Shadowrocket https://xxx/shadowrocket
 Auto         https://xxx/auto
 ```
+
+## 网络检测
+
+```bash
+speed --netcheck
+speed --speedtest
+```
+
+`--netcheck` 检查 IPv4 出站、DNS 解析、GitHub Raw、Cloudflare、HTTPS/443 和 ICMP 延迟；`--speedtest` 用于带宽测速。
 
 ## 修复与日志
 
@@ -499,10 +509,10 @@ bash <(curl -fsSL "https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/main
 
 ## 当前施工进度
 
-当前进度约 **96%**。
+当前进度约 **97%**。
 
 - 可用 Beta：已接近，可进入实机回归
-- 接近 V1.0：约 1-2 轮施工
+- 接近 V1.0：约 1 轮施工
 
 后续每轮推送固定汇报：
 

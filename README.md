@@ -17,7 +17,30 @@ scripts/vps-argo-vmess-oneclick.sh
 curl -fsSL https://raw.githubusercontent.com/cshaizhihao/vps-tcp-argo-toolkit/main/scripts/vps-argo-vmess-oneclick.sh -o /tmp/vps-argo-vmess-oneclick.sh && bash /tmp/vps-argo-vmess-oneclick.sh --all
 ```
 
-### 常用命令
+### 推荐流程
+
+首次运行：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/cshaizhihao/vps-tcp-argo-toolkit/main/scripts/vps-argo-vmess-oneclick.sh -o /tmp/speed && bash /tmp/speed --all
+```
+
+如果 TCP 阶段安装了 XanMod / BBR v3 内核，脚本会提示重启。重启后执行：
+
+```bash
+speed --continue
+```
+
+`speed --continue` 会继续完成：
+
+1. TCP 网络调优第二阶段
+2. Argo VMess + WS 安装
+3. 节点/订阅输出
+4. 健康检查
+
+这样不会陷入循环：如果重启后仍未进入 XanMod 内核，脚本会暂停并提示检查内核/GRUB，而不是继续重启。
+
+## 常用命令
 
 ```bash
 # 环境检测
@@ -31,6 +54,12 @@ bash scripts/vps-argo-vmess-oneclick.sh --install-argo-vmess
 
 # 一键执行：TCP 优化 + Argo VMess + WS
 bash scripts/vps-argo-vmess-oneclick.sh --all
+
+# 重启后继续完整流程
+speed --continue
+
+# 安装 speed 快捷命令
+bash scripts/vps-argo-vmess-oneclick.sh --install-shortcut
 
 # 查看节点 / 订阅 URL
 bash scripts/vps-argo-vmess-oneclick.sh --show-url

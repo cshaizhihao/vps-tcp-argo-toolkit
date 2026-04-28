@@ -17,6 +17,8 @@ ARGOX_SCRIPT_LOCAL="${SCRIPT_DIR}/upstream/argox.sh"
 WORK_DIR="/etc/vps-argo-vmess"
 CONFIG_FILE="${WORK_DIR}/install.conf"
 LOG_FILE="${WORK_DIR}/install.log"
+STATE_FILE="${WORK_DIR}/state.env"
+INSTALLED_BIN="/usr/local/bin/speed"
 
 DEFAULT_START_PORT="30000"
 DEFAULT_NGINX_PORT="8001"
@@ -46,10 +48,67 @@ fetch_or_run_script() {
   fi
 }
 
+install_shortcut() {
+  require_root
+  mkdir -p "$WORK_DIR"
+  if [ -s "${BASH_SOURCE[0]}" ]; then
+    cp "${BASH_SOURCE[0]}" "$INSTALLED_BIN"
+  else
+    curl -fsSL "${REPO_RAW_BASE}/scripts/vps-argo-vmess-oneclick.sh" -o "$INSTALLED_BIN"
+  fi
+  chmod +x "$INSTALLED_BIN"
+  success "已安装快捷命令：speed"
+  echo "以后可直接执行："
+  echo "  speed"
+  echo "  speed --continue"
+  echo "  speed --all"
+}
+
+save_pending_state() {
+  require_root
+  mkdir -p "$WORK_DIR"
+  cat > "$STATE_FILE" <<EOF
+PENDING_CONTINUE=1
+CREATED_AT=$(date -Is 2>/dev/null || date)
+NEXT_ACTION=continue
+EOF
+  chmod 600 "$STATE_FILE"
+}
+
+clear_state() {
+  require_root
+  rm -f "$STATE_FILE"
+  success "已清理续跑状态：$STATE_FILE"
+}
+
+is_xanmod_kernel() {
+  uname -r | grep -qi xanmod
+}
+
+show_continue_hint() {
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo " 下一步"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "如果本次安装了 XanMod/BBR v3 内核，请重启服务器。"
+  echo "重启后执行："
+  echo ""
+  echo "  speed --continue"
+  echo ""
+  echo "它会继续完成：TCP 网络调优 + Argo VMess+WS 安装 + 健康检查。"
+}
+
 run_tcp_optimize() {
   require_root
+  install_shortcut || true
+  if ! is_xanmod_kernel; then
+    save_pending_state
+  fi
   info "启动 TCP 一键全自动优化：XanMod + BBR v3 + 网络调优"
   fetch_or_run_script "$TCP_SCRIPT_LOCAL" "scripts/tcp-one-click-optimize.sh"
+  if ! is_xanmod_kernel; then
+    show_continue_hint
+  fi
 }
 
 gen_uuid() {
@@ -141,9 +200,31 @@ uninstall_argo_vmess_ws() {
 }
 
 run_all() {
+  install_shortcut || true
+  if ! is_xanmod_kernel; then
+    save_pending_state
+    run_tcp_optimize
+    show_continue_hint
+    return 0
+  fi
   run_tcp_optimize
-  warn "如果刚安装 XanMod 内核并选择重启，重启后需再次执行 --install-argo-vmess 或 --all 继续 Argo 部分。"
   install_argo_vmess_ws
+  clear_state || true
+}
+
+continue_after_reboot() {
+  require_root
+  install_shortcut || true
+  if ! is_xanmod_kernel; then
+    err "当前仍未进入 XanMod 内核，暂停继续安装 Argo，避免循环。"
+    echo "当前内核: $(uname -r)"
+    echo "建议检查 VPS 是否支持自定义内核、GRUB 启动项或重新执行 speed --optimize。"
+    exit 1
+  fi
+  info "检测到 XanMod 内核，继续执行 TCP 网络调优 + Argo VMess+WS"
+  run_tcp_optimize
+  install_argo_vmess_ws
+  clear_state || true
 }
 
 check_environment() {
@@ -282,10 +363,13 @@ Usage:
 Commands:
   --optimize             执行全自动 TCP 优化：BBR v3 + 网络调优
   --install-argo-vmess   安装/重装 Argo VMess + WS，并生成节点/订阅 URL
-  --all                  先执行 TCP 优化，再安装 Argo VMess + WS
+  --all                  智能全流程；如需重启，重启后用 speed --continue 继续
+  --continue             重启后继续：TCP 网络调优 + Argo VMess + WS
   --show-url             查看已生成的节点/订阅信息
   --uninstall-argo       卸载 Argo VMess + WS 相关服务
   --write-config         仅生成 Argo VMess + WS 配置文件，不安装
+  --install-shortcut     安装 speed 快捷命令到 /usr/local/bin/speed
+  --clear-state          清理续跑状态
   --check                检测当前环境和已安装状态
   --summary              输出结果摘要
   --health               安装后健康检查
@@ -319,9 +403,11 @@ menu() {
 3. 一键执行：TCP 优化 + Argo VMess + WS
 4. 查看节点/订阅信息
 5. 卸载 Argo VMess + WS
-6. 环境检测
-7. 结果摘要
-8. 健康检查
+6. 安装 speed 快捷命令
+7. 重启后继续安装
+8. 环境检测
+9. 结果摘要
+10. 健康检查
 0. 退出
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EOF
@@ -332,9 +418,11 @@ EOF
     3) run_all ;;
     4) show_argo_vmess_ws_info ;;
     5) uninstall_argo_vmess_ws ;;
-    6) check_environment ;;
-    7) summarize_result ;;
-    8) health_check ;;
+    6) install_shortcut ;;
+    7) continue_after_reboot ;;
+    8) check_environment ;;
+    9) summarize_result ;;
+    10) health_check ;;
     0) exit 0 ;;
     *) err "无效选择"; exit 1 ;;
   esac
@@ -344,9 +432,12 @@ case "${1:-}" in
   --optimize) run_tcp_optimize ;;
   --install-argo-vmess) install_argo_vmess_ws ;;
   --all) run_all ;;
+  --continue) continue_after_reboot ;;
   --show-url) show_argo_vmess_ws_info ;;
   --uninstall-argo) uninstall_argo_vmess_ws ;;
   --write-config) write_argox_vmess_config ;;
+  --install-shortcut) install_shortcut ;;
+  --clear-state) clear_state ;;
   --check) check_environment ;;
   --summary) summarize_result ;;
   --health) health_check ;;

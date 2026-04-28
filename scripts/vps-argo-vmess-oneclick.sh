@@ -236,6 +236,31 @@ detect_x64_level() {
   echo "$level"
 }
 
+xanmod_pkg_available() {
+  local pkg="$1"
+  apt-cache policy "$pkg" 2>/dev/null | awk '/Candidate:/ {print $2; exit}' | grep -vqE '^(\(none\)|)$'
+}
+
+select_xanmod_pkg() {
+  local level="$1" n pkg candidates=()
+  for n in "$level" 3 2 1; do
+    [ "$n" -gt "$level" ] 2>/dev/null && continue
+    candidates+=("linux-xanmod-x64v${n}")
+  done
+  candidates+=("linux-xanmod")
+  for pkg in "${candidates[@]}"; do
+    if xanmod_pkg_available "$pkg"; then
+      echo "$pkg"
+      return 0
+    fi
+  done
+  return 1
+}
+
+show_xanmod_candidates() {
+  apt-cache search '^linux-xanmod' 2>/dev/null | awk '{print "  - "$1}' | sort -u | head -30 || true
+}
+
 native_install_xanmod_kernel() {
   section "Speed Slayer · 内核加速组件"
   if [ "$(uname -m)" != "x86_64" ]; then
@@ -274,19 +299,37 @@ native_install_xanmod_kernel() {
   echo "deb [signed-by=${keyring}] https://deb.xanmod.org releases main" > "$repo_file"
 
   progress_step 55 "检测 CPU x86-64-v 等级"
-  local level pkg
+  local level pkg install_ok=0
   level="$(detect_x64_level)"
-  pkg="linux-xanmod-x64v${level}"
-  info "将安装内核包：${pkg}"
+  apt-get update -y >>"$WORK_DIR/kernel-install.log" 2>&1 || true
+  if ! pkg="$(select_xanmod_pkg "$level")"; then
+    err "未找到可安装的 XanMod 内核包。"
+    echo "可用包候选："
+    show_xanmod_candidates
+    echo "日志：$WORK_DIR/kernel-install.log"
+    return 1
+  fi
+  info "CPU 等级：x86-64-v${level}；选择内核包：${pkg}"
 
   progress_step 70 "安装 XanMod 内核包"
-  apt-get update -y >>"$WORK_DIR/kernel-install.log" 2>&1 || true
-  apt-get install -y "$pkg" >>"$WORK_DIR/kernel-install.log" 2>&1
+  if apt-get install -y "$pkg" >>"$WORK_DIR/kernel-install.log" 2>&1; then
+    install_ok=1
+  else
+    warn "${pkg} 安装失败，尝试通用 XanMod 内核包。"
+    if [ "$pkg" != "linux-xanmod" ] && xanmod_pkg_available "linux-xanmod" && apt-get install -y linux-xanmod >>"$WORK_DIR/kernel-install.log" 2>&1; then
+      pkg="linux-xanmod"
+      install_ok=1
+    fi
+  fi
+  [ "$install_ok" -eq 1 ] || { err "XanMod 内核包安装失败，日志：$WORK_DIR/kernel-install.log"; return 1; }
 
   progress_step 88 "验证内核包安装"
-  if ! dpkg -l 2>/dev/null | grep -qE "^ii\\s+${pkg}"; then
-    err "内核包安装验证失败：${pkg}"
-    return 1
+  if ! dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "install ok installed"; then
+    if ! dpkg -l 2>/dev/null | grep -qE '^ii\s+linux-(image|headers)-.*xanmod'; then
+      err "内核包安装验证失败：${pkg}"
+      echo "日志：$WORK_DIR/kernel-install.log"
+      return 1
+    fi
   fi
 
   progress_step 95 "清理临时 XanMod APT 源"
@@ -1051,7 +1094,7 @@ update_self() {
 show_roadmap() {
   section "Speed Slayer · Roadmap"
   cat <<'EOF'
-当前进度：约 86%
+当前进度：约 88%
 
 已完成：
 - 一键完整流程与重启续跑
@@ -1075,7 +1118,7 @@ show_roadmap() {
 
 预计剩余：
 - 可用 Beta：已接近，可进入实机回归
-- 接近 V1.0：约 3-4 轮施工
+- 接近 V1.0：约 3 轮施工
 EOF
 }
 

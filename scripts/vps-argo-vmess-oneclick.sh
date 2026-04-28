@@ -37,6 +37,16 @@ require_root() {
   fi
 }
 
+download_script() {
+  local raw_path="$1"
+  local out
+  out="$(mktemp /tmp/speed-slayer.XXXXXX.sh)"
+  curl -fsSL "${REPO_RAW_BASE}/${raw_path}" -o "$out"
+  bash -n "$out"
+  chmod +x "$out"
+  echo "$out"
+}
+
 fetch_or_run_script() {
   local local_path="$1"
   local raw_path="$2"
@@ -44,7 +54,9 @@ fetch_or_run_script() {
   if [ -s "$local_path" ]; then
     bash "$local_path" "$@"
   else
-    bash <(curl -fsSL "${REPO_RAW_BASE}/${raw_path}") "$@"
+    local tmp_script
+    tmp_script="$(download_script "$raw_path")"
+    bash "$tmp_script" "$@"
   fi
 }
 
@@ -60,7 +72,7 @@ install_shortcut() {
   success "已安装快捷命令：speed"
   echo "以后可直接执行："
   echo "  speed"
-  echo "  speed --continue"
+  echo "  speed"
   echo "  speed --all"
 }
 
@@ -91,11 +103,43 @@ show_continue_hint() {
   echo " 下一步"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo "如果本次安装了 XanMod/BBR v3 内核，请重启服务器。"
-  echo "重启后执行："
+  echo "重启后只需要执行："
   echo ""
-  echo "  speed --continue"
+  echo "  speed"
   echo ""
-  echo "它会继续完成：TCP 网络调优 + Argo VMess+WS 安装 + 健康检查。"
+  echo "Speed Slayer 会自动识别续跑状态，继续完成：TCP 网络调优 + Argo VMess+WS 安装 + 健康检查。"
+}
+
+run_with_progress() {
+  local title="$1"
+  shift
+  local log_file="$1"
+  shift
+  mkdir -p "$(dirname "$log_file")"
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo " $title"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  "$@" >"$log_file" 2>&1 &
+  local pid=$!
+  local frames=('▱▱▱▱▱▱▱▱▱▱ 0%' '▰▱▱▱▱▱▱▱▱▱ 10%' '▰▰▱▱▱▱▱▱▱▱ 20%' '▰▰▰▱▱▱▱▱▱▱ 30%' '▰▰▰▰▱▱▱▱▱▱ 40%' '▰▰▰▰▰▱▱▱▱▱ 50%' '▰▰▰▰▰▰▱▱▱▱ 60%' '▰▰▰▰▰▰▰▱▱▱ 70%' '▰▰▰▰▰▰▰▰▱▱ 80%' '▰▰▰▰▰▰▰▰▰▱ 90%')
+  local i=0
+  while kill -0 "$pid" 2>/dev/null; do
+    printf "\r[RUN ] %s" "${frames[$((i % ${#frames[@]}))]}"
+    i=$((i + 1))
+    sleep 1
+  done
+  set +e
+  wait "$pid"
+  local code=$?
+  set -e
+  if [ "$code" -eq 0 ]; then
+    printf "\r[DONE] ▰▰▰▰▰▰▰▰▰▰ 100%\n"
+  else
+    printf "\r[FAIL] 见日志：%s\n" "$log_file"
+    tail -n 40 "$log_file" || true
+    return "$code"
+  fi
 }
 
 run_tcp_optimize() {
@@ -159,34 +203,60 @@ EOF
   info "协议固定：VMess + WebSocket；WS Path：/${ws_path}-vm；内部端口：${start_port}；Nginx 端口：${nginx_port}"
 }
 
+verify_vmess_only() {
+  local inbound="/etc/argox/inbound.json"
+  if [ ! -s "$inbound" ]; then
+    err "未找到 ArgoX inbound 配置：$inbound"
+    return 1
+  fi
+  if grep -Eq 'reality|hysteria|trojan|shadowsocks|vless|xhttp|grpc|ss-ws|trojan-ws|vless-ws' "$inbound"; then
+    err "检测到非 VMess+WS 协议残留，拒绝标记为成功。"
+    echo "建议执行：speed --clean-argo，然后重新执行 speed --install-argo-vmess"
+    return 1
+  fi
+  if ! grep -Eq '"protocol"[[:space:]]*:[[:space:]]*"vmess"' "$inbound" || ! grep -Eq '"network"[[:space:]]*:[[:space:]]*"ws"' "$inbound"; then
+    err "未确认到 VMess + WS 配置。"
+    return 1
+  fi
+}
+
+extract_vmess_only() {
+  if [ -s /etc/argox/list ]; then
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo " Speed Slayer · VMess+WS 输出"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    grep -E 'vmess://|https?://.*/(base64|auto|clash|shadowrocket)' /etc/argox/list | grep -vE 'vless|trojan|hysteria|ss://' || true
+    echo ""
+    echo "完整原始输出：/etc/argox/list"
+  else
+    warn "尚未生成 /etc/argox/list"
+  fi
+}
+
 install_argo_vmess_ws() {
   require_root
   write_argox_vmess_config
-  info "启动 ArgoX 非交互安装，仅启用 VMess + WS"
+  info "启动 Argo VMess+WS 安装（隐藏上游瀑布日志，仅显示进度）"
   mkdir -p "$WORK_DIR"
   # -f: source config file. Do NOT add -l here: in ArgoX, -l triggers quick install and can reset protocol selection.
   if [ -s "$ARGOX_SCRIPT_LOCAL" ]; then
-    bash "$ARGOX_SCRIPT_LOCAL" -f "$CONFIG_FILE" 2>&1 | tee "$LOG_FILE"
+    run_with_progress "安装 Argo VMess+WS" "$LOG_FILE" bash "$ARGOX_SCRIPT_LOCAL" -f "$CONFIG_FILE"
   else
-    bash <(curl -fsSL "${REPO_RAW_BASE}/scripts/upstream/argox.sh") -f "$CONFIG_FILE" 2>&1 | tee "$LOG_FILE"
+    local tmp_argox
+    tmp_argox="$(download_script "scripts/upstream/argox.sh")"
+    run_with_progress "安装 Argo VMess+WS" "$LOG_FILE" bash "$tmp_argox" -f "$CONFIG_FILE"
   fi
+  verify_vmess_only
   success "Argo VMess+WS 安装流程结束"
-  show_argo_vmess_ws_info || true
+  extract_vmess_only || true
   summarize_result || true
   health_check || true
 }
 
 show_argo_vmess_ws_info() {
   require_root
-  if [ -s /etc/argox/list ]; then
-    cat /etc/argox/list
-    return 0
-  fi
-  if [ -s "$ARGOX_SCRIPT_LOCAL" ]; then
-    bash "$ARGOX_SCRIPT_LOCAL" -n
-  else
-    bash <(curl -fsSL "${REPO_RAW_BASE}/scripts/upstream/argox.sh") -n
-  fi
+  extract_vmess_only
 }
 
 uninstall_argo_vmess_ws() {
@@ -195,8 +265,21 @@ uninstall_argo_vmess_ws() {
   if [ -s "$ARGOX_SCRIPT_LOCAL" ]; then
     bash "$ARGOX_SCRIPT_LOCAL" -u
   else
-    bash <(curl -fsSL "${REPO_RAW_BASE}/scripts/upstream/argox.sh") -u
+    local tmp_argox
+    tmp_argox="$(download_script "scripts/upstream/argox.sh")"
+    bash "$tmp_argox" -u
   fi
+}
+
+clean_argo_state() {
+  require_root
+  warn "清理 ArgoX 残留配置，用于从全家桶协议恢复到纯 VMess+WS。"
+  systemctl stop argo xray nginx >/dev/null 2>&1 || true
+  systemctl disable argo xray >/dev/null 2>&1 || true
+  rm -f /etc/systemd/system/argo.service /etc/systemd/system/xray.service
+  systemctl daemon-reload >/dev/null 2>&1 || true
+  mv /etc/argox "/etc/argox.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null || true
+  success "ArgoX 残留已备份清理；现在可执行：speed --install-argo-vmess"
 }
 
 run_all() {
@@ -380,10 +463,11 @@ Usage:
 Commands:
   --optimize             执行全自动 TCP 优化：BBR v3 + 网络调优
   --install-argo-vmess   安装/重装 Argo VMess + WS，并生成节点/订阅 URL
-  --all                  智能全流程；如需重启，重启后用 speed --continue 继续
-  --continue             重启后继续：TCP 网络调优 + Argo VMess + WS
+  --all                  智能全流程；如需重启，重启后执行 speed 即可继续
+  --continue             重启后继续：TCP 网络调优 + Argo VMess + WS（兼容旧用法）
   --show-url             查看已生成的节点/订阅信息
   --uninstall-argo       卸载 Argo VMess + WS 相关服务
+  --clean-argo           清理 ArgoX 全家桶残留，备份 /etc/argox 后重装纯 VMess+WS
   --write-config         仅生成 Argo VMess + WS 配置文件，不安装
   --install-shortcut     安装 speed 快捷命令到 /usr/local/bin/speed
   --clear-state          清理续跑状态
@@ -422,13 +506,14 @@ menu() {
 3. 一键执行：TCP 优化 + Argo VMess + WS
 4. 查看节点/订阅信息
 5. 卸载 Argo VMess + WS
-6. 安装 speed 快捷命令
-7. 重启后继续安装
-8. 环境检测
-9. 结果摘要
-10. 健康检查
-11. 一键诊断 doctor
-12. 更新 speed 自身
+6. 清理 ArgoX 全家桶残留
+7. 安装 speed 快捷命令
+8. 重启后继续安装
+9. 环境检测
+10. 结果摘要
+11. 健康检查
+12. 一键诊断 doctor
+13. 更新 speed 自身
 0. 退出
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EOF
@@ -439,16 +524,27 @@ EOF
     3) run_all ;;
     4) show_argo_vmess_ws_info ;;
     5) uninstall_argo_vmess_ws ;;
-    6) install_shortcut ;;
-    7) continue_after_reboot ;;
-    8) check_environment ;;
-    9) summarize_result ;;
-    10) health_check ;;
-    11) doctor ;;
-    12) update_self ;;
+    6) clean_argo_state ;;
+    7) install_shortcut ;;
+    8) continue_after_reboot ;;
+    9) check_environment ;;
+    10) summarize_result ;;
+    11) health_check ;;
+    12) doctor ;;
+    13) update_self ;;
     0) exit 0 ;;
     *) err "无效选择"; exit 1 ;;
   esac
+}
+
+default_action() {
+  require_root
+  if [ -s "$STATE_FILE" ]; then
+    info "检测到续跑状态，自动继续完整流程。"
+    continue_after_reboot
+  else
+    menu
+  fi
 }
 
 case "${1:-}" in
@@ -458,6 +554,7 @@ case "${1:-}" in
   --continue) continue_after_reboot ;;
   --show-url) show_argo_vmess_ws_info ;;
   --uninstall-argo) uninstall_argo_vmess_ws ;;
+  --clean-argo) clean_argo_state ;;
   --write-config) write_argox_vmess_config ;;
   --install-shortcut) install_shortcut ;;
   --clear-state) clear_state ;;
@@ -467,6 +564,6 @@ case "${1:-}" in
   --doctor) doctor ;;
   --update-self) update_self ;;
   -h|--help) usage ;;
-  "") menu ;;
+  "") default_action ;;
   *) err "未知参数：$1"; usage; exit 1 ;;
 esac

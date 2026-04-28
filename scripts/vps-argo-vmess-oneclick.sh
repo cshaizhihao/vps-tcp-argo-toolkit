@@ -162,12 +162,41 @@ show_continue_hint() {
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo " 下一步"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "如果本次安装了 XanMod/BBR v3 内核，请重启服务器。"
+  echo "已完成内核组件安装，需要重启服务器加载新内核。"
   echo "重启后只需要执行："
   echo ""
   echo "  speed"
   echo ""
   echo "Speed Slayer 会自动识别续跑状态，继续完成：TCP 网络调优 + Argo VMess+WS 安装 + 健康检查。"
+}
+
+confirm_reboot_now() {
+  show_continue_hint
+  local choice="Y"
+  if [ "${ASSUME_Y:-0}" = "1" ]; then
+    choice="Y"
+  elif [ -t 0 ]; then
+    printf "%b?%b 是否现在重启服务器？默认回车 = Y %b[Y/n]%b " "$C_YELLOW" "$C_RESET" "$C_GREEN" "$C_RESET"
+    read -r choice || choice=""
+    choice="${choice:-Y}"
+  else
+    warn "非交互环境：已保存续跑状态，请手动重启后执行 speed。"
+    return 0
+  fi
+  case "$choice" in
+    [Yy]*)
+      success "即将重启服务器。重启后执行：speed"
+      sync || true
+      if command -v systemctl >/dev/null 2>&1; then
+        systemctl reboot
+      else
+        reboot
+      fi
+      ;;
+    *)
+      warn "已暂不重启。准备好后执行：reboot；重启后执行：speed"
+      ;;
+  esac
 }
 
 run_with_progress() {
@@ -485,9 +514,12 @@ run_tcp_optimize() {
     save_pending_state
     section "安装 XanMod + BBR v3 内核"
     warn "当前不是 XanMod 内核。此阶段保留核心输出，避免隐藏安装失败或重启提示。"
-    run_tcp_backend_visible
-    show_continue_hint
-    return 0
+    if run_tcp_backend_visible; then
+      confirm_reboot_now
+      return 0
+    fi
+    err "内核组件安装失败，日志：$WORK_DIR/kernel-install.log"
+    return 1
   fi
 
   local ipv6_choice="Y"
@@ -1094,7 +1126,7 @@ update_self() {
 show_roadmap() {
   section "Speed Slayer · Roadmap"
   cat <<'EOF'
-当前进度：约 88%
+当前进度：约 89%
 
 已完成：
 - 一键完整流程与重启续跑

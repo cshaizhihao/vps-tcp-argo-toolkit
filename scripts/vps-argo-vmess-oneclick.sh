@@ -7,7 +7,7 @@ set -euo pipefail
 # - Argo VMess+WS: native cloudflared + Xray + Nginx implementation, no ArgoX install chain.
 
 REPO_RAW_BASE="https://raw.githubusercontent.com/cshaizhihao/speed-slayer/main"
-SPEED_SLAYER_VERSION="v1.0.0"
+SPEED_SLAYER_VERSION="v1.0.1"
 PROJECT_URL="https://github.com/cshaizhihao/speed-slayer"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo .)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd 2>/dev/null || echo .)"
@@ -1404,12 +1404,25 @@ remote_version() {
 }
 
 version_rank() {
-  printf '%s\n' "$1" | sed -nE 's/^([0-9]{4})\.([0-9]{2})\.([0-9]{2})-r([0-9]+)$/\1\2\3\4/p'
+  local v="$1" major minor patch rev
+  v="${v#v}"
+  rev=0
+  case "$v" in
+    *-r*) rev="${v##*-r}"; v="${v%%-r*}" ;;
+  esac
+  major="${v%%.*}"
+  v="${v#*.}"
+  minor="${v%%.*}"
+  patch="${v#*.}"
+  major="${major:-0}"; minor="${minor:-0}"; patch="${patch:-0}"; rev="${rev:-0}"
+  case "$major$minor$patch$rev" in *[!0-9]*) return 1 ;; esac
+  printf "%03d%03d%03d%03d\n" "$major" "$minor" "$patch" "$rev"
 }
 
 is_newer_version() {
   local remote="$1" current="$2" rr cr
-  rr="$(version_rank "$remote")"; cr="$(version_rank "$current")"
+  rr="$(version_rank "$remote")" || return 1
+  cr="$(version_rank "$current")" || return 1
   [ -n "$rr" ] && [ -n "$cr" ] && [ "$rr" -gt "$cr" ]
 }
 
@@ -1426,18 +1439,31 @@ check_self_update_hint() {
 update_self() {
   require_root
   mkdir -p "$WORK_DIR"
-  local api_url raw_url
+  local api_url raw_url tmp version_after
+  tmp="$INSTALLED_BIN.tmp"
   api_url="https://api.github.com/repos/cshaizhihao/speed-slayer/contents/scripts/vps-argo-vmess-oneclick.sh?ref=main&ts=$(date +%s)"
   raw_url="${REPO_RAW_BASE}/scripts/vps-argo-vmess-oneclick.sh?$(date +%s)"
-  if command -v python3 >/dev/null 2>&1 && curl -fsSL -H 'Accept: application/vnd.github.raw' -H 'Cache-Control: no-cache' "$api_url" -o "$INSTALLED_BIN.tmp"; then
+
+  rm -f "$tmp"
+  if curl -fsSL -H 'Accept: application/vnd.github.raw' -H 'Cache-Control: no-cache' "$api_url" -o "$tmp"; then
     :
   else
-    curl -fsSL -H 'Cache-Control: no-cache' "$raw_url" -o "$INSTALLED_BIN.tmp"
+    warn "GitHub API 下载失败，尝试 raw.githubusercontent.com"
+    curl -fsSL -H 'Cache-Control: no-cache' "$raw_url" -o "$tmp"
   fi
-  bash -n "$INSTALLED_BIN.tmp"
-  mv "$INSTALLED_BIN.tmp" "$INSTALLED_BIN"
+
+  if ! head -n 1 "$tmp" | grep -qE '^#!/usr/bin/env bash|^#!/bin/bash'; then
+    err "下载到的不是 bash 脚本，已取消更新。文件头部："
+    head -n 5 "$tmp" >&2 || true
+    rm -f "$tmp"
+    return 1
+  fi
+
+  bash -n "$tmp"
+  version_after="$(grep -m1 '^SPEED_SLAYER_VERSION=' "$tmp" | cut -d= -f2- | tr -d '"')"
+  mv "$tmp" "$INSTALLED_BIN"
   chmod +x "$INSTALLED_BIN"
-  success "speed 已更新到最新版本：$INSTALLED_BIN"
+  success "speed 已更新：${version_after:-unknown} -> $INSTALLED_BIN"
   "$INSTALLED_BIN" --version || true
 }
 

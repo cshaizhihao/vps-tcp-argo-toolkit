@@ -7,7 +7,7 @@ set -euo pipefail
 # - Argo VMess+WS: native cloudflared + Xray + Nginx implementation, no ArgoX install chain.
 
 REPO_RAW_BASE="https://raw.githubusercontent.com/cshaizhihao/speed-slayer/main"
-SPEED_SLAYER_VERSION="v1.0.14"
+SPEED_SLAYER_VERSION="v1.0.15"
 PROJECT_URL="https://github.com/cshaizhihao/speed-slayer"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo .)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd 2>/dev/null || echo .)"
@@ -1339,7 +1339,18 @@ continue_after_reboot() {
   if ! is_xanmod_kernel; then
     err "当前仍未进入 XanMod 内核，暂停继续安装 Argo，避免循环。"
     echo "当前内核: $(uname -r)"
-    echo "建议检查 VPS 是否支持自定义内核、GRUB 启动项或重新执行 speed --optimize。"
+    echo ""
+    echo "已安装的 XanMod 包："
+    dpkg -l 2>/dev/null | awk '/^ii\s+linux-.*xanmod/ {print "  - "$2" "$3}' || true
+    if ! dpkg -l 2>/dev/null | grep -qE '^ii\s+linux-.*xanmod'; then
+      echo "  - 未检测到已安装的 XanMod 内核包"
+    fi
+    echo ""
+    echo "下一步建议："
+    echo "  1. 如果刚安装完内核，请先执行 reboot，重启后再输入 speed。"
+    echo "  2. 如果重启后仍不是 XanMod，说明 VPS 可能不支持自定义内核/GRUB 未切换。"
+    echo "  3. 如需重试内核安装：speed --optimize"
+    echo "  4. 如需取消续跑状态回到主页：speed --clear-state"
     exit 1
   fi
   info "检测到 XanMod 内核，继续执行 TCP 网络调优 + Argo VMess+WS"

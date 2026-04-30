@@ -1,6 +1,6 @@
 #!/bin/bash
 #=============================================================================
-# BBR v3 终极优化脚本 - Ultimate Edition
+# Speed Slayer TCP 调优内测脚本 - v1.0.1-beta
 # 功能：结合 XanMod 官方内核的稳定性 + 专业队列算法调优
 # 特点：安全性 + 性能 双优化
 #=============================================================================
@@ -15,7 +15,7 @@
 # v4.9.3 更新: 修复Responses API转换代理：system消息正确提取为instructions字段，修复无system消息时报错 (by Eric86777)
 
 SCRIPT_VERSION="5.0.0"
-SCRIPT_LAST_UPDATE="新增 Cloudflare Tunnel 管理模块(32-7):一键安装/添加/修改/删除/启停/日志/切换账户,含失败自动回滚 + 老配置迁移"
+SCRIPT_LAST_UPDATE="Speed Slayer v1.0.1-beta: TCP 缓存按带宽分档 + 小内存保护 + 手动缓存档位"
 #=============================================================================
 
 #=============================================================================
@@ -2209,24 +2209,16 @@ bbr_configure_direct() {
 
     local detected_bandwidth=$(detect_bandwidth)
 
-    # 地区选择（影响缓冲区大小：高延迟地区需要更大缓冲区）
-    local region="asia"
-    local region_choice=""
+    # v1.0.1-beta：不再按地区区分“标准/大缓冲区”，统一按带宽分档 + 内存保护。
+    local region="bandwidth-tier"
     echo ""
-    echo -e "${gl_kjlan}请选择服务器主要服务的地区：${gl_bai}"
-    echo ""
-    echo "1. 亚太地区（港/日/新/韩等）⭐ 推荐"
-    echo "   延迟较低（RTT < 100ms），使用标准缓冲区"
-    echo ""
-    echo "2. 美国/欧洲（跨太平洋/大西洋）"
-    echo "   延迟较高（RTT 150-300ms），使用大缓冲区"
-    echo ""
-    read -e -p "请输入选择 [1]: " region_choice
-    region_choice=${region_choice:-1}
-    case "$region_choice" in
-        2) region="overseas" ;;
-        *) region="asia" ;;
-    esac
+    echo -e "${gl_kjlan}Speed Slayer v1.0.1-beta 缓存策略：${gl_bai}"
+    echo "  - ≤100Mbps      → 16MB"
+    echo "  - 100-500Mbps   → 32MB"
+    echo "  - 500Mbps-1Gbps → 64MB"
+    echo "  - 1Gbps-2.5Gbps → 128MB"
+    echo "  - ≥5Gbps/10Gbps → 256MB（高级/实验档）"
+    echo -e "${gl_zi}说明：本版按带宽分档，并自动执行小内存保护，不再让用户选择地区缓冲区。${gl_bai}"
 
     local buffer_mb=$(calculate_buffer_size "$detected_bandwidth" "$region")
     local buffer_bytes=$((buffer_mb * 1024 * 1024))
@@ -2280,7 +2272,7 @@ bbr_configure_direct() {
     cat > "$SYSCTL_CONF" << EOF
 # BBR v3 Direct/Endpoint Configuration (Intelligent Detection Edition)
 # Generated on $(date)
-# Bandwidth: ${detected_bandwidth} Mbps | Region: ${region} | Buffer: ${buffer_mb} MB
+# Bandwidth: ${detected_bandwidth} Mbps | Strategy: bandwidth-tier | Buffer: ${buffer_mb} MB
 
 # 队列调度算法
 net.core.default_qdisc=fq
@@ -6402,7 +6394,8 @@ show_main_menu() {
     local box_width=50
     local inner=$((box_width - 2))
     echo -e "${gl_zi}╔$(printf '═%.0s' $(seq 1 $inner))╗${gl_bai}"
-    echo -e "${gl_zi}║ $(format_fixed_width "BBR v3 终极优化脚本 - Ultimate Edition" $((inner - 2))) ║${gl_bai}"
+    echo -e "${gl_zi}║ $(format_fixed_width "Speed Slayer TCP Tuning Beta" $((inner - 2))) ║${gl_bai}"
+    echo -e "${gl_zi}║ $(format_fixed_width "v1.0.1-beta · bandwidth buffer presets" $((inner - 2))) ║${gl_bai}"
     echo -e "${gl_zi}║ $(format_fixed_width "version ${SCRIPT_VERSION}" $((inner - 2))) ║${gl_bai}"
     if [ -n "$SCRIPT_LAST_UPDATE" ]; then
         echo -e "${gl_zi}║ ${gl_huang}$(format_fixed_width "更新: ${SCRIPT_LAST_UPDATE}" $((inner - 2)))${gl_zi} ║${gl_bai}"

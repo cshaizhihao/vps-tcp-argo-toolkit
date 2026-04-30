@@ -6391,84 +6391,32 @@ show_main_menu() {
     local is_installed=$?
 
     echo ""
-    local box_width=50
+    local box_width=58
     local inner=$((box_width - 2))
     echo -e "${gl_zi}╔$(printf '═%.0s' $(seq 1 $inner))╗${gl_bai}"
-    echo -e "${gl_zi}║ $(format_fixed_width "Speed Slayer TCP Tuning Beta" $((inner - 2))) ║${gl_bai}"
-    echo -e "${gl_zi}║ $(format_fixed_width "v1.0.1-beta · bandwidth buffer presets" $((inner - 2))) ║${gl_bai}"
-    echo -e "${gl_zi}║ $(format_fixed_width "version ${SCRIPT_VERSION}" $((inner - 2))) ║${gl_bai}"
-    if [ -n "$SCRIPT_LAST_UPDATE" ]; then
-        echo -e "${gl_zi}║ ${gl_huang}$(format_fixed_width "更新: ${SCRIPT_LAST_UPDATE}" $((inner - 2)))${gl_zi} ║${gl_bai}"
-    fi
+    echo -e "${gl_zi}║ $(format_fixed_width "Speed Slayer v1.0.1 TCP 调优测试版" $((inner - 2))) ║${gl_bai}"
+    echo -e "${gl_zi}║ $(format_fixed_width "XanMod / BBR v3 / 带宽分档缓存" $((inner - 2))) ║${gl_bai}"
     echo -e "${gl_zi}╚$(printf '═%.0s' $(seq 1 $inner))╝${gl_bai}"
     echo ""
-    echo -e "${gl_kjlan}━━━━━━━━━━━━ 核心功能 ━━━━━━━━━━━━${gl_bai}"
-    echo -e "${gl_kjlan}[内核管理]${gl_bai}"
+    echo -e "${gl_kjlan}━━━━━━━━━━━━ Speed Slayer 核心功能 ━━━━━━━━━━━━${gl_bai}"
     echo "1. 安装/更新 XanMod 内核 + BBR v3 ⭐ 推荐"
     echo "2. 卸载 XanMod 内核"
+    echo "3. TCP 调优：按带宽分档缓存 + 小内存保护 ⭐ 本次重点测试"
+    echo "4. Realm 转发 timeout 修复"
+    echo "5. 查看系统详细状态"
+    echo "6. 服务器带宽测试"
+    echo "66. 一键全自动优化：BBR v3 + TCP 调优"
     echo ""
-    echo -e "${gl_kjlan}[BBR/网络优化]${gl_bai}"
-    echo "3. BBR 直连/落地优化（智能带宽检测）⭐ 推荐"
-    echo -e "4. ${gl_hui}已移除（功能3已覆盖MTU智能探测）${gl_bai}"
-    echo "5. NS论坛-DNS净化（抗污染/驯服DHCP）"
-    echo "6. Realm转发timeout修复 ⭐ 推荐"
-    echo ""
-    echo -e "${gl_kjlan}━━━━━━━━━━━ 系统配置 ━━━━━━━━━━━${gl_bai}"
-    echo "7. 设置IPv4/IPv6优先级"
-    echo "8. IPv6管理（临时/永久禁用/取消）"
-    echo "9. 设置临时SOCKS5代理"
-    echo "10. 虚拟内存管理"
-    echo "11. 查看系统详细状态"
-    echo ""
-    echo -e "${gl_kjlan}━━━━━━━━━━ 代理部署 ━━━━━━━━━━${gl_bai}"
-    echo "12. 星辰大海Snell协议 ⭐ 推荐"
-    echo "13. 星辰大海Xray一键多协议 ⭐ 推荐"
-    echo "14. 禁止端口通过中国大陆直连"
-    echo "15. 一键部署SOCKS5代理"
-    echo "16. Sub-Store多实例管理"
-    echo "17. 一键反代 ⭐ 推荐"
-    echo ""
-    echo -e "${gl_kjlan}━━━━━━━━━━━ 测试检测 ━━━━━━━━━━━${gl_bai}"
-    echo -e "${gl_kjlan}[IP质量检测]${gl_bai}"
-    echo "18. IP质量检测（IPv4+IPv6）"
-    echo "19. IP质量检测（仅IPv4）⭐ 推荐"
-    echo ""
-    echo -e "${gl_kjlan}[网络测试]${gl_bai}"
-    echo "20. 服务器带宽测试"
-    echo "21. iperf3单线程测试"
-    echo "22. 国际互联速度测试 ⭐ 推荐"
-    echo "23. 网络延迟质量检测 ⭐ 推荐"
-    echo "24. 三网回程路由测试 ⭐ 推荐"
-    echo ""
-    echo -e "${gl_kjlan}[流媒体/AI检测]${gl_bai}"
-    echo "25. IP媒体/AI解锁检测 ⭐ 推荐"
-    echo "26. NQ一键检测 ⭐ 推荐"
-    echo ""
-    echo -e "${gl_kjlan}━━━━━━━━━━ 第三方工具 ━━━━━━━━━━${gl_bai}"
-    echo "27. zywe_realm转发脚本（查看原版仓库）"
-    echo "28. F佬一键sing box脚本"
-    echo "29. 科技lion脚本"
-    echo "30. NS论坛CAKE调优"
-    echo "31. 科技lion高性能模式"
-    echo ""
-    echo -e "${gl_kjlan}━━━━━━━━━ AI 代理服务 ━━━━━━━━━${gl_bai}"
-    echo "32. AI代理工具箱 ▶ (Claude/WebUI/CRS/Fuclaude/Caddy/CF-Tunnel) ⭐ 推荐"
-    echo ""
-    echo -e "${gl_kjlan}━━━━━━━━━ 一键优化 ━━━━━━━━━${gl_bai}"
-    echo "66. ⭐ 一键全自动优化 (BBR v3 + 网络调优)"
-    echo ""
-    echo -e "${gl_hong}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${gl_bai}"
-    echo -e "${gl_hong}99. 完全卸载脚本（卸载所有内容）${gl_bai}"
-    echo ""
+    echo -e "${gl_hui}已隐藏原底层脚本里的第三方工具/AI代理/Sub-Store 等非 Speed Slayer 测试项，避免误导。${gl_bai}"
+    echo -e "${gl_hong}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${gl_bai}"
     echo "0. 退出脚本"
-    echo -e "${gl_kjlan}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${gl_bai}"
+    echo -e "${gl_kjlan}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${gl_bai}"
     read -e -p "请输入选择: " choice
 
     case $choice in
         1)
             if [ $is_installed -eq 0 ]; then
                 update_xanmod_kernel
-                # update 函数内部已有重启交互，无需再次调用 server_reboot
             else
                 install_xanmod_kernel && server_reboot
             fi
@@ -6486,99 +6434,17 @@ show_main_menu() {
             break_end
             ;;
         4)
-            echo -e "${gl_huang}⚠️ 功能4已在v4.9.2移除，功能3的tcp_mtu_probing已覆盖MTU智能探测${gl_bai}"
-            break_end
-            ;;
-        5)
-            dns_purify_and_harden
-            ;;
-        6)
             realm_fix_timeout
             break_end
             ;;
-        7)
-            manage_ip_priority
-            ;;
-        8)
-            manage_ipv6
-            ;;
-        9)
-            set_temp_socks5_proxy
-            ;;
-        10)
-            manage_swap
-            ;;
-        11)
+        5)
             show_detailed_status
             ;;
-        12)
-            snell_menu
-            ;;
-        13)
-            run_xinchendahai_xray
-            ;;
-        14)
-            manage_cn_ip_block
-            ;;
-        15)
-            manage_socks5
-            ;;
-        16)
-            manage_substore
-            ;;
-        17)
-            manage_reverse_proxy
-            ;;
-        18)
-            run_ip_quality_check
-            ;;
-        19)
-            run_ip_quality_check_ipv4
-            ;;
-        20)
+        6)
             run_speedtest
-            ;;
-        21)
-            iperf3_single_thread_test
-            ;;
-        22)
-            run_international_speed_test
-            ;;
-        23)
-            run_network_latency_check
-            ;;
-        24)
-            run_backtrace
-            ;;
-        25)
-            run_unlock_check
-            ;;
-        26)
-            run_ns_detect
-            ;;
-        27)
-            run_pf_realm
-            ;;
-        28)
-            run_fscarmen_singbox
-            ;;
-        29)
-            run_kejilion_script
-            ;;
-        30)
-            startbbrcake
-            ;;
-        31)
-            Kernel_optimize
-            ;;
-        32)
-            ai_proxy_menu
             ;;
         66)
             one_click_optimize
-            ;;
-        99)
-            uninstall_all
             ;;
         0)
             echo "退出脚本"
@@ -6590,6 +6456,7 @@ show_main_menu() {
             ;;
     esac
 }
+
 
 update_xanmod_kernel() {
     clear

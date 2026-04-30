@@ -7,7 +7,7 @@ set -euo pipefail
 # - Argo VMess+WS: native cloudflared + Xray + Nginx implementation, no ArgoX install chain.
 
 REPO_RAW_BASE="https://raw.githubusercontent.com/cshaizhihao/speed-slayer/main"
-SPEED_SLAYER_VERSION="v1.0.15"
+SPEED_SLAYER_VERSION="v1.0.16"
 PROJECT_URL="https://github.com/cshaizhihao/speed-slayer"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo .)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd 2>/dev/null || echo .)"
@@ -174,6 +174,15 @@ is_xanmod_kernel() {
   uname -r | grep -qi xanmod
 }
 
+is_container_env() {
+  [ -f /.dockerenv ] && return 0
+  [ -f /run/.containerenv ] && return 0
+  if command -v systemd-detect-virt >/dev/null 2>&1; then
+    systemd-detect-virt --container --quiet 2>/dev/null && return 0
+  fi
+  grep -qaE '/(docker|lxc|kubepods|containerd)/' /proc/1/cgroup 2>/dev/null
+}
+
 show_continue_hint() {
   echo ""
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -251,6 +260,7 @@ tcp_status_panel() {
   section "Speed Slayer · TCP 状态"
   printf "%b%-18s%b %s\n" "$C_CYAN" "Kernel" "$C_RESET" "$(uname -r)"
   printf "%b%-18s%b %s\n" "$C_CYAN" "XanMod" "$C_RESET" "$(is_xanmod_kernel && echo YES || echo NO)"
+  printf "%b%-18s%b %s\n" "$C_CYAN" "Container" "$C_RESET" "$(is_container_env && echo YES || echo NO)"
   printf "%b%-18s%b %s\n" "$C_CYAN" "Congestion" "$C_RESET" "$(tcp_value net.ipv4.tcp_congestion_control)"
   printf "%b%-18s%b %s\n" "$C_CYAN" "Qdisc" "$C_RESET" "$(tcp_value net.core.default_qdisc)"
   printf "%b%-18s%b %s\n" "$C_CYAN" "IPv6 disabled" "$C_RESET" "$(tcp_value net.ipv6.conf.all.disable_ipv6)"
@@ -264,6 +274,10 @@ tcp_plan_panel() {
     progress_step 55 "执行 DNS 净化 / 网络稳定性修复"
     progress_step 75 "执行 Realm 首连超时修复"
     progress_step 90 "可选 IPv6 禁用"
+    progress_step 100 "输出 TCP 状态摘要"
+  elif is_container_env; then
+    progress_step 10 "检测到容器环境：跳过 XanMod 内核安装"
+    progress_step 35 "进入无内核降级模式：仅应用容器内可生效的网络参数"
     progress_step 100 "输出 TCP 状态摘要"
   else
     progress_step 10 "当前不是 XanMod：准备安装 XanMod + BBR v3 内核"
@@ -944,15 +958,19 @@ run_tcp_optimize() {
   install_shortcut || true
 
   if ! is_xanmod_kernel; then
-    save_pending_state
-    section "安装 XanMod + BBR v3 内核"
-    warn "当前不是 XanMod 内核。此阶段保留核心输出，避免隐藏安装失败或重启提示。"
-    if run_tcp_backend_visible; then
-      confirm_reboot_now
-      return 0
+    if is_container_env; then
+      warn "检测到容器环境：容器不能安装/切换 XanMod 宿主机内核，已进入无内核降级模式。"
+    else
+      save_pending_state
+      section "安装 XanMod + BBR v3 内核"
+      warn "当前不是 XanMod 内核。此阶段保留核心输出，避免隐藏安装失败或重启提示。"
+      if run_tcp_backend_visible; then
+        confirm_reboot_now
+        return 0
+      fi
+      err "内核组件安装失败，日志：$WORK_DIR/kernel-install.log"
+      return 1
     fi
-    err "内核组件安装失败，日志：$WORK_DIR/kernel-install.log"
-    return 1
   fi
 
   local ipv6_choice="Y"
@@ -1316,7 +1334,7 @@ force_all() {
   render_header_once
   ASSUME_Y=1
   install_shortcut || true
-  if ! is_xanmod_kernel; then
+  if ! is_xanmod_kernel && ! is_container_env; then
     save_pending_state
     run_tcp_optimize
     return 0

@@ -7,7 +7,7 @@ set -euo pipefail
 # - Argo VMess+WS: native cloudflared + Xray + Nginx implementation, no ArgoX install chain.
 
 REPO_RAW_BASE="https://raw.githubusercontent.com/cshaizhihao/speed-slayer/main"
-SPEED_SLAYER_VERSION="v2.0.3"
+SPEED_SLAYER_VERSION="v2.0.4"
 PROJECT_URL="https://github.com/cshaizhihao/speed-slayer"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo .)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd 2>/dev/null || echo .)"
@@ -1366,6 +1366,7 @@ run_all() {
 
 run_menu() {
   render_header_once
+  install_shortcut || true
   menu_body
 }
 
@@ -1892,7 +1893,7 @@ Commands:
   --install-argo-vmess   单独安装/重装 Argo VMess+WS，并生成节点/订阅 URL
   --all                  完整流程：TCP 调优 + Argo 节点；如需重启，重启后执行 speed 继续
   --force-all            等同 --all
-  --menu                 只打开交互控制台，不自动执行流程
+  --menu                 安装/刷新 speed 快捷命令并打开交互控制台
   --continue             自动续跑：TCP 网络调优 + Argo VMess + WS
   --show-url             查看已生成的节点/订阅信息
   --uninstall-argo       卸载 Argo VMess + WS 相关服务

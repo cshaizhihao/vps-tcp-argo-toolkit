@@ -7,7 +7,7 @@ set -euo pipefail
 # - Argo VMess+WS: native cloudflared + Xray + Nginx implementation, no ArgoX install chain.
 
 REPO_RAW_BASE="https://raw.githubusercontent.com/cshaizhihao/speed-slayer/main"
-SPEED_SLAYER_VERSION="v1.0.5"
+SPEED_SLAYER_VERSION="v1.0.6"
 PROJECT_URL="https://github.com/cshaizhihao/speed-slayer"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo .)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd 2>/dev/null || echo .)"
@@ -1609,6 +1609,25 @@ repair_install() {
 }
 
 
+menu_section_repair() {
+  section "Speed Slayer · 修复 / 清理 / 卸载"
+  cat <<'EOF'
+1. 修复 Argo 安装（清理残留并重装）
+2. 清理 Argo 配置（备份 /etc/argox）
+3. 删除 / 卸载 Speed Slayer ⭐
+0. 返回主页
+EOF
+  read -r -p "请选择: " choice
+  case "$choice" in
+    1) repair_install ;;
+    2) clean_argo_state ;;
+    3) uninstall_speed_slayer ;;
+    0) menu_body ;;
+    *) err "无效选择"; return 1 ;;
+  esac
+}
+
+
 uninstall_speed_slayer() {
   render_header_once
   require_root
@@ -1867,7 +1886,7 @@ menu_body() {
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   1. 一键执行完整流程        2. 节点管理
   3. TCP 加速                4. 诊断与日志
-  5. 修复与清理              6. 更新
+  5. 修复/清理/卸载         6. 更新
   0. 退出
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EOF
@@ -1877,7 +1896,7 @@ EOF
     2) menu_section_node ;;
     3) menu_section_tcp ;;
     4) menu_section_diag ;;
-    5) repair_install ;;
+    5) menu_section_repair ;;
     6) menu_section_system ;;
     0) exit 0 ;;
     *) err "无效选择"; exit 1 ;;

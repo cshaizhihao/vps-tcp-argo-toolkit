@@ -225,7 +225,7 @@ MIT or repository default license. See repository files for details.
 
 ## v1.0.1-beta 内测说明
 
-当前内测分支：`beta/v1.0.1-tcp-buffer-tuning`
+当前测试来源：`main`
 
 本轮优先修复 1.0 版本里「TCP 一键调优无感」的问题：
 
@@ -243,11 +243,11 @@ MIT or repository default license. See repository files for details.
 内测安装：
 
 ```bash
-curl -fsSL "https://raw.githubusercontent.com/cshaizhihao/speed-slayer/beta/v1.0.1-tcp-buffer-tuning/scripts/tcp-one-click-optimize.sh?ts=$(date +%s)" -o /tmp/speed-slayer-beta && bash /tmp/speed-slayer-beta
+curl -fsSL "https://raw.githubusercontent.com/cshaizhihao/speed-slayer/main/scripts/tcp-one-click-optimize.sh?ts=$(date +%s)" -o /tmp/speed-slayer-beta && bash /tmp/speed-slayer-beta
 ```
 
 国内网络可尝试：
 
 ```bash
-curl -fsSL "https://gh-proxy.com/https://raw.githubusercontent.com/cshaizhihao/speed-slayer/beta/v1.0.1-tcp-buffer-tuning/scripts/tcp-one-click-optimize.sh?ts=$(date +%s)" -o /tmp/speed-slayer-beta && bash /tmp/speed-slayer-beta
+curl -fsSL "https://gh-proxy.com/https://raw.githubusercontent.com/cshaizhihao/speed-slayer/main/scripts/tcp-one-click-optimize.sh?ts=$(date +%s)" -o /tmp/speed-slayer-beta && bash /tmp/speed-slayer-beta
 ```

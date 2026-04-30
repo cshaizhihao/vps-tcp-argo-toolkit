@@ -7,7 +7,7 @@ set -euo pipefail
 # - Argo VMess+WS: native cloudflared + Xray + Nginx implementation, no ArgoX install chain.
 
 REPO_RAW_BASE="https://raw.githubusercontent.com/cshaizhihao/speed-slayer/main"
-SPEED_SLAYER_VERSION="v1.1.1"
+SPEED_SLAYER_VERSION="v1.1.2"
 PROJECT_URL="https://github.com/cshaizhihao/speed-slayer"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo .)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd 2>/dev/null || echo .)"
@@ -2000,12 +2000,12 @@ menu_body() {
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  『Speed Slayer 控制台』
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  1. ⚡ Speed Slayer TCP+Argo
-  2. 🚀 一键TCP调优
-  3. 🌐 一键Vmess+Argo 节点生成
-  4. 🩺 诊断与日志
-  5. 🧰 修复/清理/卸载
-  6. 🔄 更新
+  1. Speed Slayer TCP+Argo 🚀
+  2. 一键TCP调优
+  3. 一键Vmess+Argo 节点生成
+  4. 诊断与日志
+  5. 修复/清理/卸载
+  6. 更新
   0. 退出
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EOF

@@ -7,7 +7,7 @@ set -euo pipefail
 # - Argo VMess+WS: native cloudflared + Xray + Nginx implementation, no ArgoX install chain.
 
 REPO_RAW_BASE="https://raw.githubusercontent.com/cshaizhihao/speed-slayer/main"
-SPEED_SLAYER_VERSION="v2.0.6"
+SPEED_SLAYER_VERSION="v2.0.7"
 PROJECT_URL="https://github.com/cshaizhihao/speed-slayer"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo .)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd 2>/dev/null || echo .)"
@@ -1300,7 +1300,20 @@ print('VMess+WS 校验通过')
 PYVERIFY
 }
 
-extract_vmess_only() { [ -s /etc/argox/list ] && cat /etc/argox/list || warn "尚未生成 /etc/argox/list"; }
+extract_vmess_only() {
+  if [ ! -s /etc/argox/list ]; then
+    warn "尚未生成 /etc/argox/list"
+    return 0
+  fi
+  local line
+  while IFS= read -r line; do
+    case "$line" in
+      vmess://*) printf "%b%s%b\n" "$C_BOLD$C_GREEN" "$line" "$C_RESET" ;;
+      *http://*|*https://*) printf "%b%s%b\n" "$C_CYAN" "$line" "$C_RESET" ;;
+      *) printf "%s\n" "$line" ;;
+    esac
+  done < /etc/argox/list
+}
 
 install_argo_vmess_ws() {
   render_header_once
@@ -1758,21 +1771,23 @@ repair_install() {
 
 
 menu_section_repair() {
-  section "Speed Slayer · 修复 / 清理 / 卸载"
-  cat <<'EOF'
+  while true; do
+    section "Speed Slayer · 修复 / 清理 / 卸载"
+    cat <<'EOF'
 1. 修复 Argo 安装（清理残留并重装）
 2. 清理 Argo 配置（备份 /etc/argox）
 3. 删除 / 卸载 Speed Slayer ⭐
 0. 返回主页
 EOF
-  read -r -p "请选择: " choice
-  case "$choice" in
-    1) repair_install ;;
-    2) clean_argo_state ;;
-    3) uninstall_speed_slayer ;;
-    0) menu_body ;;
-    *) err "无效选择"; return 1 ;;
-  esac
+    read -r -p "请选择: " choice
+    case "$choice" in
+      1) repair_install; menu_pause ;;
+      2) clean_argo_state; menu_pause ;;
+      3) uninstall_speed_slayer; menu_pause ;;
+      0) return 0 ;;
+      *) err "无效选择"; menu_pause ;;
+    esac
+  done
 }
 
 
@@ -1957,9 +1972,16 @@ Examples:
 EOF
 }
 
+menu_pause() {
+  [ -t 0 ] || return 0
+  echo ""
+  read -r -p "按回车返回上级菜单..." _ || true
+}
+
 menu_section_node() {
-  section "Speed Slayer · 节点管理"
-  cat <<'EOF'
+  while true; do
+    section "Speed Slayer · 节点管理"
+    cat <<'EOF'
 1. 安装/重装 Argo VMess+WS
 2. 查看节点/订阅信息
 3. 修复 Argo 安装
@@ -1967,39 +1989,43 @@ menu_section_node() {
 5. 清理 Argo 配置
 0. 返回主页
 EOF
-  read -r -p "请选择: " choice
-  case "$choice" in
-    1) install_argo_vmess_ws ;;
-    2) show_argo_vmess_ws_info ;;
-    3) repair_install ;;
-    4) uninstall_argo_vmess_ws ;;
-    5) clean_argo_state ;;
-    0) menu_body ;;
-    *) err "无效选择"; return 1 ;;
-  esac
+    read -r -p "请选择: " choice
+    case "$choice" in
+      1) install_argo_vmess_ws; menu_pause ;;
+      2) show_argo_vmess_ws_info; menu_pause ;;
+      3) repair_install; menu_pause ;;
+      4) uninstall_argo_vmess_ws; menu_pause ;;
+      5) clean_argo_state; menu_pause ;;
+      0) return 0 ;;
+      *) err "无效选择"; menu_pause ;;
+    esac
+  done
 }
 
 menu_section_tcp() {
-  section "Speed Slayer · TCP 加速"
-  cat <<'EOF'
+  while true; do
+    section "Speed Slayer · TCP 加速"
+    cat <<'EOF'
 1. 查看 TCP / BBR / 内核状态
 2. 执行 TCP 优化
 3. 重启后继续安装
 0. 返回主页
 EOF
-  read -r -p "请选择: " choice
-  case "$choice" in
-    1) tcp_status_panel ;;
-    2) run_tcp_optimize ;;
-    3) continue_after_reboot ;;
-    0) menu_body ;;
-    *) err "无效选择"; return 1 ;;
-  esac
+    read -r -p "请选择: " choice
+    case "$choice" in
+      1) tcp_status_panel; menu_pause ;;
+      2) run_tcp_optimize; menu_pause ;;
+      3) continue_after_reboot; menu_pause ;;
+      0) return 0 ;;
+      *) err "无效选择"; menu_pause ;;
+    esac
+  done
 }
 
 menu_section_diag() {
-  section "Speed Slayer · 诊断与日志"
-  cat <<'EOF'
+  while true; do
+    section "Speed Slayer · 诊断与日志"
+    cat <<'EOF'
 1. 一键诊断 doctor
 2. 环境检测
 3. 结果摘要
@@ -2009,40 +2035,44 @@ menu_section_diag() {
 7. Netcheck 网络检测
 0. 返回主页
 EOF
-  read -r -p "请选择: " choice
-  case "$choice" in
-    1) doctor ;;
-    2) check_environment ;;
-    3) summarize_result ;;
-    4) health_check ;;
-    5) show_logs ;;
-    6) run_speedtest_cmd ;;
-    7) run_netcheck ;;
-    0) menu_body ;;
-    *) err "无效选择"; return 1 ;;
-  esac
+    read -r -p "请选择: " choice
+    case "$choice" in
+      1) doctor; menu_pause ;;
+      2) check_environment; menu_pause ;;
+      3) summarize_result; menu_pause ;;
+      4) health_check; menu_pause ;;
+      5) show_logs; menu_pause ;;
+      6) run_speedtest_cmd; menu_pause ;;
+      7) run_netcheck; menu_pause ;;
+      0) return 0 ;;
+      *) err "无效选择"; menu_pause ;;
+    esac
+  done
 }
 
 menu_section_system() {
-  section "Speed Slayer · 更新 / 删除"
-  cat <<'EOF'
+  while true; do
+    section "Speed Slayer · 更新 / 删除"
+    cat <<'EOF'
 1. 安装 speed 快捷命令
 2. 更新 speed 自身
 3. 删除 / 卸载 Speed Slayer
 0. 返回主页
 EOF
-  read -r -p "请选择: " choice
-  case "$choice" in
-    1) install_shortcut ;;
-    2) update_self ;;
-    3) uninstall_speed_slayer ;;
-    0) menu_body ;;
-    *) err "无效选择"; return 1 ;;
-  esac
+    read -r -p "请选择: " choice
+    case "$choice" in
+      1) install_shortcut; menu_pause ;;
+      2) update_self; menu_pause ;;
+      3) uninstall_speed_slayer; menu_pause ;;
+      0) return 0 ;;
+      *) err "无效选择"; menu_pause ;;
+    esac
+  done
 }
 
 menu_body() {
-  cat <<'EOF'
+  while true; do
+    cat <<'EOF'
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  『Speed Slayer 控制台』
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -2055,17 +2085,18 @@ menu_body() {
   0. 退出
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EOF
-  read -r -p "请输入选择: " choice
-  case "$choice" in
-    1) force_all ;;
-    2) menu_section_tcp ;;
-    3) menu_section_node ;;
-    4) menu_section_diag ;;
-    5) menu_section_repair ;;
-    6) menu_section_system ;;
-    0) exit 0 ;;
-    *) err "无效选择"; exit 1 ;;
-  esac
+    read -r -p "请输入选择: " choice
+    case "$choice" in
+      1) force_all; menu_pause ;;
+      2) menu_section_tcp ;;
+      3) menu_section_node ;;
+      4) menu_section_diag ;;
+      5) menu_section_repair ;;
+      6) menu_section_system ;;
+      0) exit 0 ;;
+      *) err "无效选择"; menu_pause ;;
+    esac
+  done
 }
 
 menu() {

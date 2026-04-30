@@ -7,7 +7,7 @@ set -euo pipefail
 # - Argo VMess+WS: native cloudflared + Xray + Nginx implementation, no ArgoX install chain.
 
 REPO_RAW_BASE="https://raw.githubusercontent.com/cshaizhihao/speed-slayer/main"
-SPEED_SLAYER_VERSION="v1.0.10"
+SPEED_SLAYER_VERSION="v1.0.11"
 PROJECT_URL="https://github.com/cshaizhihao/speed-slayer"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo .)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd 2>/dev/null || echo .)"
@@ -330,14 +330,42 @@ native_install_xanmod_kernel() {
 
   progress_step 25 "导入 XanMod GPG key"
   local keyring="/usr/share/keyrings/xanmod-archive-keyring.gpg"
-  local key_tmp
+  local key_tmp key_url key_ok=0
   key_tmp="$(mktemp)"
-  if ! wget -qO "$key_tmp" "https://dl.xanmod.org/archive.key" >>"$WORK_DIR/kernel-install.log" 2>&1; then
-    err "XanMod GPG key 下载失败"
+  : > "$key_tmp"
+  echo "[XanMod GPG] start $(date -Is 2>/dev/null || date)" >>"$WORK_DIR/kernel-install.log"
+  for key_url in     "https://dl.xanmod.org/archive.key"     "https://raw.githubusercontent.com/xanmod/linux/main/gpg.key"; do
+    echo "[XanMod GPG] try: $key_url" >>"$WORK_DIR/kernel-install.log"
+    if command -v curl >/dev/null 2>&1; then
+      if curl -fL --connect-timeout 10 --max-time 30 --retry 2 "$key_url" -o "$key_tmp" >>"$WORK_DIR/kernel-install.log" 2>&1; then
+        if grep -q "BEGIN PGP PUBLIC KEY BLOCK" "$key_tmp" 2>/dev/null; then
+          key_ok=1
+          break
+        fi
+        echo "[XanMod GPG] downloaded content is not an ASCII armored PGP key" >>"$WORK_DIR/kernel-install.log"
+      fi
+    fi
+    if command -v wget >/dev/null 2>&1; then
+      if wget --timeout=30 --tries=2 -O "$key_tmp" "$key_url" >>"$WORK_DIR/kernel-install.log" 2>&1; then
+        if grep -q "BEGIN PGP PUBLIC KEY BLOCK" "$key_tmp" 2>/dev/null; then
+          key_ok=1
+          break
+        fi
+        echo "[XanMod GPG] downloaded content is not an ASCII armored PGP key" >>"$WORK_DIR/kernel-install.log"
+      fi
+    fi
+  done
+  if [ "$key_ok" -ne 1 ]; then
+    err "XanMod GPG key 下载失败，已记录详细 curl/wget 错误：$WORK_DIR/kernel-install.log"
+    echo "建议检查：DNS、HTTPS 出站、dl.xanmod.org 访问；也可先执行 speed --netcheck。"
     rm -f "$key_tmp"
     return 1
   fi
-  gpg --dearmor -o "$keyring" --yes < "$key_tmp" >>"$WORK_DIR/kernel-install.log" 2>&1
+  if ! gpg --dearmor -o "$keyring" --yes < "$key_tmp" >>"$WORK_DIR/kernel-install.log" 2>&1; then
+    err "XanMod GPG key 导入失败，日志：$WORK_DIR/kernel-install.log"
+    rm -f "$key_tmp"
+    return 1
+  fi
   rm -f "$key_tmp"
 
   progress_step 40 "写入临时 XanMod APT 源"

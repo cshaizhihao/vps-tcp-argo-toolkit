@@ -8,7 +8,7 @@
 # 1. 大版本更新时修改 SCRIPT_VERSION，并更新版本备注（保留最新5条）
 # 2. 小修复时只修改 SCRIPT_LAST_UPDATE，用于快速识别脚本是否已更新
 #=============================================================================
-# v5.0.0 更新: 新增 Cloudflare Tunnel 管理模块 (菜单 32-7)：12 项子功能 + 6 步向导含失败自动回滚；修复 Sub-Store 6 个历史 bug；统一配置到 /etc/cloudflared/ 并自动迁移老路径 (by Eric86777)
+# v1.0.1-beta 更新: Speed Slayer TCP 缓存按带宽分档 + 小内存保护 + 手动缓存档位
 # v4.9.8 更新: 修复Snell/VLESS/OAI2节点随机掉线：Restart=always+systemd健壮性加固；XanMod内核安装增加本地CPU检测兜底 (by Eric86777)
 # v4.9.5 更新: 修复Responses API代理SSE解析，解决502报错，重新部署生效 (by Eric86777)
 # v4.9.4 更新: 修复Responses API转换代理：兼容SSE流式响应格式，解决502 JSON解析失败 (by Eric86777)
@@ -2209,7 +2209,7 @@ bbr_configure_direct() {
 
     local detected_bandwidth=$(detect_bandwidth)
 
-    # v1.0.1-beta：不再按地区区分“标准/大缓冲区”，统一按带宽分档 + 内存保护。
+    # v1.0.1-beta：统一按带宽分档 + 内存保护。
     local region="bandwidth-tier"
     echo ""
     echo -e "${gl_kjlan}Speed Slayer v1.0.1-beta 缓存策略：${gl_bai}"
@@ -25886,7 +25886,7 @@ manage_oai2() {
 # 显示帮助信息
 show_help() {
     cat << EOF
-BBR v3 终极优化脚本 v${SCRIPT_VERSION}
+Speed Slayer TCP 调优脚本 v${SCRIPT_VERSION}
 
 用法: $0 [选项]
 
@@ -25916,7 +25916,7 @@ parse_args() {
                 exit 0
                 ;;
             -v|--version)
-                echo "net-tcp-tune.sh v${SCRIPT_VERSION}"
+                echo "Speed Slayer TCP 调优脚本 v${SCRIPT_VERSION} · v1.0.1-beta"
                 exit 0
                 ;;
             -i|--install)

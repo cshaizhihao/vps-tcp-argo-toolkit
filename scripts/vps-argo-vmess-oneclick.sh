@@ -610,6 +610,57 @@ bandwidth_color() {
   fi
 }
 
+
+select_tcp_buffer_mb() {
+  local recommended="$1" mem_mb="$2" selected=""
+  echo "" >&2
+  section "TCP 缓存档位确认" >&2
+  echo "检测后推荐缓存：${recommended}MB（${TCP_BUFFER_REASON:-bandwidth-tier}）" >&2
+  echo "" >&2
+  echo "请选择 TCP 缓存档位：" >&2
+  echo "1. 使用推荐值 ${recommended}MB ⭐ 推荐" >&2
+  echo "2. 16MB  （≤100Mbps / 小内存保守）" >&2
+  echo "3. 32MB  （100-500Mbps 标准）" >&2
+  echo "4. 64MB  （500Mbps-1Gbps 高速）" >&2
+  echo "5. 128MB （1Gbps-2.5Gbps 极限）" >&2
+  echo "6. 256MB（≥2.5Gbps 高级/实验）" >&2
+  echo "7. 手动输入 MB（高级）" >&2
+  echo "" >&2
+  echo "提示：缓存不是越大越好；高并发或小内存机器过大可能增加内存压力。" >&2
+
+  if [ "${ASSUME_Y:-0}" = "1" ] || [ ! -t 0 ]; then
+    echo "AutoMode=1，自动使用推荐值 ${recommended}MB" >&2
+    echo "$recommended"
+    return 0
+  fi
+
+  read -r -p "请输入选择 [1]: " selected
+  selected="${selected:-1}"
+  case "$selected" in
+    1) echo "$recommended" ;;
+    2) echo "16" ;;
+    3) echo "32" ;;
+    4) echo "64" ;;
+    5) echo "128" ;;
+    6) echo "256" ;;
+    7)
+      local manual=""
+      while true; do
+        read -r -p "请输入缓存大小 MB（建议 16/32/64/128/256，范围 4-512）: " manual
+        if [[ "$manual" =~ ^[0-9]+$ ]] && [ "$manual" -ge 4 ] && [ "$manual" -le 512 ]; then
+          echo "$manual"
+          break
+        fi
+        warn "请输入 4-512 之间的整数。" >&2
+      done
+      ;;
+    *)
+      warn "无效选择，使用推荐值 ${recommended}MB" >&2
+      echo "$recommended"
+      ;;
+  esac
+}
+
 native_speed_tcp_tune() {
   local ipv6_choice="$1"
   section "Speed Slayer · TCP 加速配置"
@@ -631,7 +682,10 @@ native_speed_tcp_tune() {
   detect_bandwidth_profile
   bandwidth="$BANDWIDTH_MBPS"
   region="${SPEED_REGION:-global}"
-  buffer_mb="$(calculate_tcp_buffer_mb "$bandwidth" "$mem_mb")"
+  local recommended_buffer_mb
+  recommended_buffer_mb="$(calculate_tcp_buffer_mb "$bandwidth" "$mem_mb")"
+  buffer_mb="$(select_tcp_buffer_mb "$recommended_buffer_mb" "$mem_mb")"
+  [ "$buffer_mb" != "$recommended_buffer_mb" ] && TCP_BUFFER_REASON="manual-select"
   buffer_bytes=$((buffer_mb * 1024 * 1024))
   local bw_color
   bw_color="$(bandwidth_color "$bandwidth")"
